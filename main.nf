@@ -92,16 +92,25 @@ workflow {
     //
     // The nf-core umitools/extract module expects: [ meta, [ fastq ] ]
     // We add an extra map() to wrap the single FASTQ in a list as required.
-    UMITOOLS_EXTRACT(
-        reads_ch.map { meta, fq -> [ meta, [ fq ] ] },
-        params.umi_pattern
-    )
+    // UMITOOLS_EXTRACT(
+    //     reads_ch.map { meta, fq -> [ meta, [ fq ] ] },
+    //     params.umi_pattern
+    // )
 
     // -- 3. Trim adapters -------------------------------------------------------
     // Removes Illumina adapter sequences and low-quality bases from read ends.
     // For sgRNA screens this is especially important: reads must be trimmed
     // to the exact length of the sgRNA (typically 20 bp) for accurate alignment.
-    TRIMGALORE( UMITOOLS_EXTRACT.out.reads )
+    // TRIMGALORE( UMITOOLS_EXTRACT.out.reads )
+
+    // -- 2. Extract UMIs + Trim adapters --------------------------------------------------------
+    // We can combine UMI extraction and adapter trimming into a single step using the nf-core
+    // fastq_fastqc_umitools_trimgalore subworkflow. This runs UMI-tools extract and Trim Galore
+    // together, and also produces FastQC reports for both raw and processed reads.
+    FASTQ_FASTQC_UMITOOLS_TRIMGALORE(
+        reads_ch,
+        params.umi_pattern
+    )
 
     // -- 4. Build Bowtie index from sgRNA library FASTA -------------------------
     // Bowtie needs to pre-process the FASTA into an index before aligning.
@@ -116,7 +125,7 @@ workflow {
     // We combine each sample's trimmed reads with the single shared index.
     // .combine() pairs every item in TRIMGALORE.out.reads with the bowtie index.
     BOWTIE_ALIGN(
-        TRIMGALORE.out.reads.combine( BOWTIE_BUILD.out.index )
+        FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.reads.combine( BOWTIE_BUILD.out.index )
     )
 
     // -- 6. Sort BAM ------------------------------------------------------------
