@@ -1,0 +1,89 @@
+{
+    "sarscov2_bam_bai - umicollapse - no transcriptome bams": {
+        "content": [
+            "c1917631c47d16320d002b867e226a2e",
+            [
+                [
+                    {
+                        "id": "test"
+                    },
+                    "test.umi_dedup.genome.sorted.bam.stats:md5,557ea05b85a50181053fab977b219c6b"
+                ]
+            ],
+            [
+                [
+                    {
+                        "id": "test"
+                    },
+                    "test.umi_dedup.genome.sorted.bam.flagstat:md5,18d602435a02a4d721b78d1812622159"
+                ]
+            ],
+            [
+                [
+                    {
+                        "id": "test"
+                    },
+                    "test.umi_dedup.genome.sorted.bam.idxstats:md5,85d20a901eef23ca50c323638a2eb602"
+                ]
+            ]
+        ],
+        "meta": {
+            "nf-test": "0.9.3",
+            "nextflow": "25.10.3"
+        },
+        "timestamp": "2026-02-03T11:36:10.619537296"
+    },
+    "sarscov2_bam_bai - umitools - with transcriptome bams": {
+        "content": [
+            "c1917631c47d16320d002b867e226a2e",
+            "fe38ce657d4208a850702bdbfaa062ca",
+            [
+                [
+                    {
+                        "id": "test"
+                    },
+                    "test.umi_dedup.genome.sorted.bam.stats:md5,557ea05b85a50181053fab977b219c6b"
+                ],
+                [
+                    {
+                        "id": "test"
+                    },
+                    "test.umi_dedup.transcriptome.sorted.bam.stats:md5,2244c40fb943c917aaa00232a2617223"
+                ]
+            ],
+            [
+                [
+                    {
+                        "id": "test"
+                    },
+                    "test.umi_dedup.genome.sorted.bam.flagstat:md5,18d602435a02a4d721b78d1812622159"
+                ],
+                [
+                    {
+                        "id": "test"
+                    },
+                    "test.umi_dedup.transcriptome.sorted.bam.flagstat:md5,18d602435a02a4d721b78d1812622159"
+                ]
+            ],
+            [
+                [
+                    {
+                        "id": "test"
+                    },
+                    "test.umi_dedup.genome.sorted.bam.idxstats:md5,85d20a901eef23ca50c323638a2eb602"
+                ],
+                [
+                    {
+                        "id": "test"
+                    },
+                    "test.umi_dedup.transcriptome.sorted.bam.idxstats:md5,85d20a901eef23ca50c323638a2eb602"
+                ]
+            ]
+        ],
+        "meta": {
+            "nf-test": "0.9.3",
+            "nextflow": "25.10.3"
+        },
+        "timestamp": "2026-02-03T11:36:02.170476803"
+    }
+}

@@ -49,7 +49,8 @@ include { BOWTIE_BUILD } from './modules/nf-core/bowtie/build/main'
 include { BOWTIE_ALIGN } from './modules/nf-core/bowtie/align/main'
 include { SAMTOOLS_SORT } from './modules/nf-core/samtools/sort/main'
 include { SAMTOOLS_INDEX } from './modules/nf-core/samtools/index/main'
-include { UMITOOLS_DEDUP } from './modules/nf-core/umitools/dedup/main'
+// include { UMITOOLS_DEDUP } from './modules/nf-core/umitools/dedup/main'
+include { BAM_DEDUP_UMI } from '../subworkflows/nf-core/bam_dedup_umi/main'
 include { MAGECK_COUNT } from './modules/nf-core/mageck/count/main'
 include { MAGECK_TEST } from './modules/nf-core/mageck/test/main'
 
@@ -150,7 +151,7 @@ workflow {
     bam_bai_ch = SAMTOOLS_SORT.out.bam
         .join( SAMTOOLS_INDEX.out.bai )
 
-    UMITOOLS_DEDUP( bam_bai_ch )
+    BAM_DEDUP_UMI( bam_bai_ch )
 
     // -- 9. MAGeCK count --------------------------------------------------------
     // Because we did our OWN alignment (Bowtie) and deduplication (UMI-tools),
