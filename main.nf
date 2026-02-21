@@ -26,7 +26,6 @@ params.mageck_treatment_id = null      // Sample label(s) for treatment in MAGeC
 params.mageck_control_id   = null      // Sample label(s) for control in MAGeCK test e.g. "day0_plasmid"
 params.skip_fastqc    = false          // Whether to skip FastQC steps (true/false)
 params.with_umi       = true           // Whether to perform UMI extraction (true/false
-params.umi_dedup_tool = 'umitools'    // Tool for UMI deduplication: 'umicollapse' or 'umitools'
 params.skip_umi_extract = false       // Whether to skip UMI extraction step (true/false)
 params.skip_trimming  = false          // Whether to skip adapter trimming (true/false)
 params.umi_discard_read = 0            // Whether to discard R1 (1), R2 (2) or keep both (0) after UMI extraction
@@ -57,8 +56,7 @@ include { BOWTIE_BUILD } from './modules/nf-core/bowtie/build/main'
 include { BOWTIE_ALIGN } from './modules/nf-core/bowtie/align/main'
 include { SAMTOOLS_SORT } from './modules/nf-core/samtools/sort/main'
 include { SAMTOOLS_INDEX } from './modules/nf-core/samtools/index/main'
-// include { UMITOOLS_DEDUP } from './modules/nf-core/umitools/dedup/main'
-include { BAM_DEDUP_UMI } from '../subworkflows/nf-core/bam_dedup_umi/main'
+include { UMITOOLS_DEDUP } from './modules/nf-core/umitools/dedup/main'
 include { MAGECK_COUNT } from './modules/nf-core/mageck/count/main'
 include { MAGECK_TEST } from './modules/nf-core/mageck/test/main'
 
@@ -164,15 +162,7 @@ workflow {
     bam_bai_ch = SAMTOOLS_SORT.out.bam
         .join( SAMTOOLS_INDEX.out.bai )
 
-    BAM_DEDUP_UMI( 
-        bam_bai_ch, 
-        ch_fasta,
-        params.umi_dedup_tool,
-        params.dedup_stats,
-        false,
-        ch_transcriptome_bam,
-        ch_transcript_fasta
-    )
+    UMITOOLS_DEDUP( bam_bai_ch, params.dedup_stats )
 
     // -- 9. MAGeCK count --------------------------------------------------------
     // Because we did our OWN alignment (Bowtie) and deduplication (UMI-tools),
