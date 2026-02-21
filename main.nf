@@ -27,6 +27,7 @@ params.mageck_control_id   = null      // Sample label(s) for control in MAGeCK 
 params.umi_pattern    = 'NNNNNNNNNN'     // UMI pattern: N = UMI base, X = non-UMI base
 params.outdir         = 'results'
 params.genome         = null           // Not used for sgRNA mapping, but kept for extensibility
+params.dedup_stats    = false          // Whether to generate UMI-tools dedup stats (true/false)
 
 // ── Input validation ──────────────────────────────────────────────────────────
 // Nextflow will stop with a clear error if required params are missing
@@ -151,7 +152,7 @@ workflow {
     bam_bai_ch = SAMTOOLS_SORT.out.bam
         .join( SAMTOOLS_INDEX.out.bai )
 
-    BAM_DEDUP_UMI( bam_bai_ch )
+    BAM_DEDUP_UMI( bam_bai_ch, params.dedup_stats )
 
     // -- 9. MAGeCK count --------------------------------------------------------
     // Because we did our OWN alignment (Bowtie) and deduplication (UMI-tools),
