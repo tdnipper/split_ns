@@ -26,6 +26,7 @@ params.mageck_treatment_id = null      // Sample label(s) for treatment in MAGeC
 params.mageck_control_id   = null      // Sample label(s) for control in MAGeCK test e.g. "day0_plasmid"
 params.skip_fastqc    = false          // Whether to skip FastQC steps (true/false)
 params.with_umi       = true           // Whether to perform UMI extraction (true/false
+params.umi_dedup_tool = 'umitools'    // Tool for UMI deduplication: 'umicollapse' or 'umitools'
 params.skip_umi_extract = false       // Whether to skip UMI extraction step (true/false)
 params.skip_trimming  = false          // Whether to skip adapter trimming (true/false)
 params.umi_discard_read = 0            // Whether to discard R1 (1), R2 (2) or keep both (0) after UMI extraction
@@ -33,7 +34,7 @@ params.min_trimmed_reads = 10          // Minimum number of reads after trimming
 params.umi_pattern    = 'NNNNNNNNNN'     // UMI pattern: N = UMI base, X = non-UMI base
 params.outdir         = 'results'
 params.genome         = null           // Not used for sgRNA mapping, but kept for extensibility
-params.dedup_stats    = false          // Whether to generate UMI-tools dedup stats (true/false)
+params.dedup_stats    = true          // Whether to generate UMI-tools dedup stats (true/false)
 
 // ── Input validation ──────────────────────────────────────────────────────────
 // Nextflow will stop with a clear error if required params are missing
@@ -116,7 +117,7 @@ workflow {
     // fastq_fastqc_umitools_trimgalore subworkflow. This runs UMI-tools extract and Trim Galore
     // together, and also produces FastQC reports for both raw and processed reads.
     FASTQ_FASTQC_UMITOOLS_TRIMGALORE(
-        reads_ch,
+        reads_ch.map { meta, fq -> [ meta, [ fq ] ] },
         params.skip_fastqc,
         params.with_umi,
         params.skip_umi_extract,
@@ -163,7 +164,15 @@ workflow {
     bam_bai_ch = SAMTOOLS_SORT.out.bam
         .join( SAMTOOLS_INDEX.out.bai )
 
-    BAM_DEDUP_UMI( bam_bai_ch, params.dedup_stats )
+    BAM_DEDUP_UMI( 
+        bam_bai_ch, 
+        ch_fasta,
+        params.umi_dedup_tool,
+        params.dedup_stats,
+        false,
+        ch_transcriptome_bam,
+        ch_transcript_fasta
+    )
 
     // -- 9. MAGeCK count --------------------------------------------------------
     // Because we did our OWN alignment (Bowtie) and deduplication (UMI-tools),
