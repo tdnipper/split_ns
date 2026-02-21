@@ -24,6 +24,12 @@ params.sgrna_library  = null           // Path to sgRNA library FASTA
 params.mageck_control = null           // File listing control sgRNA IDs (one per line)
 params.mageck_treatment_id = null      // Sample label(s) for treatment in MAGeCK test e.g. "day14_rep1,day14_rep2"
 params.mageck_control_id   = null      // Sample label(s) for control in MAGeCK test e.g. "day0_plasmid"
+params.skip_fastqc    = false          // Whether to skip FastQC steps (true/false)
+params.with_umi       = true           // Whether to perform UMI extraction (true/false
+params.skip_umi_extract = false       // Whether to skip UMI extraction step (true/false)
+params.skip_trimming  = false          // Whether to skip adapter trimming (true/false)
+params.umi_discard_read = 0            // Whether to discard R1 (1), R2 (2) or keep both (0) after UMI extraction
+params.min_trimmed_reads = 10          // Minimum number of reads after trimming to keep sample (integer > 0)
 params.umi_pattern    = 'NNNNNNNNNN'     // UMI pattern: N = UMI base, X = non-UMI base
 params.outdir         = 'results'
 params.genome         = null           // Not used for sgRNA mapping, but kept for extensibility
@@ -111,7 +117,12 @@ workflow {
     // together, and also produces FastQC reports for both raw and processed reads.
     FASTQ_FASTQC_UMITOOLS_TRIMGALORE(
         reads_ch,
-        params.umi_pattern
+        params.skip_fastqc,
+        params.with_umi,
+        params.skip_umi_extract,
+        params.skip_trimming,
+        params.umi_discard_read,
+        params.min_trimmed_reads
     )
 
     // -- 4. Build Bowtie index from sgRNA library FASTA -------------------------
