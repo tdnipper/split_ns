@@ -1,1 +1,5 @@
 .venv/
+.nextflow/
+work/
+.nextflow.*
+results/
