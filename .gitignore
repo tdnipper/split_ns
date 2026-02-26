@@ -6,3 +6,4 @@ results/
 .venv/
 raw_data/
 subsampled_reads/
+.DS_Store
