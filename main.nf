@@ -63,25 +63,41 @@ include { MAGECK_TEST } from './modules/nf-core/mageck/test/main'
 // ── Helper: parse samplesheet ─────────────────────────────────────────────────
 /*
     Expected samplesheet format (CSV):
-        sample,fastq_1,condition
-        ctrl_rep1,/path/to/ctrl_rep1.fastq.gz,control
-        treat_rep1,/path/to/treat_rep1.fastq.gz,treatment
+
+    Single-end:
+        sample,fastq_1,fastq_2,condition
+        ctrl_rep1,/path/to/ctrl_rep1.fastq.gz,,control
+        treat_rep1,/path/to/treat_rep1.fastq.gz,,treatment
+
+    Paired-end:
+        sample,fastq_1,fastq_2,condition
+        ctrl_rep1,/path/to/ctrl_rep1_R1.fastq.gz,/path/to/ctrl_rep1_R2.fastq.gz,control
+        treat_rep1,/path/to/treat_rep1_R1.fastq.gz,/path/to/treat_rep1_R2.fastq.gz,treatment
 
     - 'sample'    : unique sample identifier
-    - 'fastq_1'   : path to FASTQ (single-end; CRISPR screens are almost always SE)
+    - 'fastq_1'   : path to R1 FASTQ (required)
+    - 'fastq_2'   : path to R2 FASTQ (leave empty for single-end)
     - 'condition' : used later by MAGeCK to define control vs treatment groups
+
+    Note: meta.single_end is set automatically based on whether fastq_2 is provided.
+    For paired-end CRISPR screens, set --umi_discard_read 2 to discard R2 after
+    UMI extraction so that only R1 (the sgRNA read) is passed to alignment.
 */
 def parse_samplesheet(csv_file) {
     Channel
         .fromPath(csv_file)
         .splitCsv(header: true)
         .map { row ->
+            def single_end = !row.fastq_2 || row.fastq_2.trim() == ''
             def meta = [
-                id        : row.sample,
-                condition : row.condition
+                id         : row.sample,
+                condition  : row.condition,
+                single_end : single_end
             ]
-            def fastq = file(row.fastq_1, checkIfExists: true)
-            return [ meta, fastq ]
+            def reads = single_end
+                ? [ file(row.fastq_1, checkIfExists: true) ]
+                : [ file(row.fastq_1, checkIfExists: true), file(row.fastq_2, checkIfExists: true) ]
+            return [ meta, reads ]
         }
 }
 
@@ -89,7 +105,9 @@ def parse_samplesheet(csv_file) {
 workflow {
 
     // -- 1. Load reads from samplesheet ----------------------------------------
-    // 'reads_ch' now holds tuples of: [ [id, condition], /path/to/file.fastq.gz ]
+    // 'reads_ch' holds tuples of:
+    //   single-end: [ [id, condition, single_end:true],  [ /path/to/file.fastq.gz ] ]
+    //   paired-end: [ [id, condition, single_end:false], [ /path/to/R1.fastq.gz, /path/to/R2.fastq.gz ] ]
     reads_ch = parse_samplesheet(params.input)
 
     // -- 2. Extract UMIs --------------------------------------------------------
@@ -115,7 +133,7 @@ workflow {
     // fastq_fastqc_umitools_trimgalore subworkflow. This runs UMI-tools extract and Trim Galore
     // together, and also produces FastQC reports for both raw and processed reads.
     FASTQ_FASTQC_UMITOOLS_TRIMGALORE(
-        reads_ch.map { meta, fq -> [ meta, [ fq ] ] },
+        reads_ch,
         params.skip_fastqc,
         params.with_umi,
         params.skip_umi_extract,
