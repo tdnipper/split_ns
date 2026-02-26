@@ -35,15 +35,6 @@ params.outdir         = 'results'
 params.genome         = null           // Not used for sgRNA mapping, but kept for extensibility
 params.dedup_stats    = true          // Whether to generate UMI-tools dedup stats (true/false)
 
-// ── Input validation ──────────────────────────────────────────────────────────
-// Nextflow will stop with a clear error if required params are missing
-
-if (!params.input)               { error "Please provide a samplesheet with --input" }
-if (!params.sgrna_library)       { error "Please provide an sgRNA library FASTA with --sgrna_library" }
-if (!params.mageck_control)      { error "Please provide a control sgRNA list with --mageck_control" }
-if (!params.mageck_treatment_id) { error "Please provide treatment sample ID(s) with --mageck_treatment_id" }
-if (!params.mageck_control_id)   { error "Please provide control sample ID(s) with --mageck_control_id" }
-
 // ── Import nf-core modules ────────────────────────────────────────────────────
 // Each 'include' pulls in a self-contained process from the modules/ directory.
 // After running `nf-core modules install <module>` these files will live under:
@@ -85,6 +76,13 @@ def parse_samplesheet(csv_file) {
 
 // ── Main workflow ─────────────────────────────────────────────────────────────
 workflow {
+
+    // ── Input validation ───────────────────────────────────────────────────────
+    if (!params.input)               { error "Please provide a samplesheet with --input" }
+    if (!params.sgrna_library)       { error "Please provide an sgRNA library FASTA with --sgrna_library" }
+    if (!params.mageck_control)      { error "Please provide a control sgRNA list with --mageck_control" }
+    if (!params.mageck_treatment_id) { error "Please provide treatment sample ID(s) with --mageck_treatment_id" }
+    if (!params.mageck_control_id)   { error "Please provide control sample ID(s) with --mageck_control_id" }
 
     // -- 1. Load reads from samplesheet ----------------------------------------
     // 'reads_ch' now holds tuples of: [ [id, condition], /path/to/file.fastq.gz ]
@@ -210,16 +208,16 @@ workflow {
         params.mageck_control_id,     // e.g. "day0_plasmid"
         file(params.mageck_control)   // non-targeting control sgRNA list (one per line)
     )
-}
 
-// ── Workflow completion summary ───────────────────────────────────────────────
-workflow.onComplete {
-    log.info """
-    ========================================
-    Pipeline complete!
-    Status   : ${ workflow.success ? 'SUCCESS' : 'FAILED' }
-    Results  : ${params.outdir}
-    Duration : ${workflow.duration}
-    ========================================
-    """.stripIndent()
+    // ── Workflow completion summary ────────────────────────────────────────────
+    workflow.onComplete {
+        log.info """
+        ========================================
+        Pipeline complete!
+        Status   : ${ workflow.success ? 'SUCCESS' : 'FAILED' }
+        Results  : ${params.outdir}
+        Duration : ${workflow.duration}
+        ========================================
+        """.stripIndent()
+    }
 }
