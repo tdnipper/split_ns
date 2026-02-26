@@ -73,7 +73,7 @@ include { MAGECK_TEST } from './modules/nf-core/mageck/test/main'
     UMI extraction so that only R1 (the sgRNA read) is passed to alignment.
 */
 def parse_samplesheet(csv_file) {
-    Channel
+    channel
         .fromPath(csv_file)
         .splitCsv(header: true)
         .map { row ->
