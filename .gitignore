@@ -6,6 +6,7 @@ results/
 .venv/
 raw_data/
 subsampled_reads/
+.DS_Store
 build/
 dist/
 *.egg-info/
