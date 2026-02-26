@@ -49,9 +49,7 @@ if (!params.mageck_control_id)   { error "Please provide control sample ID(s) wi
 // After running `nf-core modules install <module>` these files will live under:
 //   modules/nf-core/<tool>/<subtool>/main.nf
 
-//include { UMITOOLS_EXTRACT } from './modules/nf-core/umitools/extract/main'
-//include { TRIMGALORE } from './modules/nf-core/trimgalore/main'
-include { FASTQ_FASTQC_UMITOOLS_TRIMGALORE } from '../subworkflows/nf-core/fastq_fastqc_umitools_trimgalore/main'                                       
+include { FASTQ_FASTQC_UMITOOLS_TRIMGALORE } from './subworkflows/nf-core/fastq_fastqc_umitools_trimgalore/main'
 include { BOWTIE_BUILD } from './modules/nf-core/bowtie/build/main'
 include { BOWTIE_ALIGN } from './modules/nf-core/bowtie/align/main'
 include { SAMTOOLS_SORT } from './modules/nf-core/samtools/sort/main'
