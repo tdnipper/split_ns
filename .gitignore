@@ -9,3 +9,4 @@ subsampled_reads/
 build/
 dist/
 *.egg-info/
+.vscode/
