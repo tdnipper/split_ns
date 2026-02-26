@@ -1,3 +1,8 @@
 .venv/
+.nextflow/
+work/
+.nextflow.*
+results/
+.venv/
 raw_data/
 subsampled_reads/
