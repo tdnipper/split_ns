@@ -21,6 +21,7 @@
 
 params.input          = null           // Path to samplesheet CSV (see format below)
 params.sgrna_library  = null           // Path to sgRNA library FASTA
+params.interleave     = false          // Whether input FASTQs are interleaved (true/false)
 params.mageck_control = null           // File listing control sgRNA IDs (one per line)
 params.mageck_treatment_id = null      // Sample label(s) for treatment in MAGeCK test e.g. "day14_rep1,day14_rep2"
 params.mageck_control_id   = null      // Sample label(s) for control in MAGeCK test e.g. "day0_plasmid"
@@ -28,7 +29,6 @@ params.skip_fastqc    = false          // Whether to skip FastQC steps (true/fal
 params.with_umi       = true           // Whether to perform UMI extraction (true/false
 params.skip_umi_extract = false       // Whether to skip UMI extraction step (true/false)
 params.skip_trimming  = false          // Whether to skip adapter trimming (true/false)
-params.umi_discard_read = 0            // Whether to discard R1 (1), R2 (2) or keep both (0) after UMI extraction
 params.min_trimmed_reads = 10          // Minimum number of reads after trimming to keep sample (integer > 0)
 params.umi_pattern    = 'NNNNNNNNNN'     // UMI pattern: N = UMI base, X = non-UMI base
 params.outdir         = 'results'
@@ -40,7 +40,8 @@ params.dedup_stats    = true          // Whether to generate UMI-tools dedup sta
 // After running `nf-core modules install <module>` these files will live under:
 //   modules/nf-core/<tool>/<subtool>/main.nf
 
-include { FASTQ_FASTQC_UMITOOLS_TRIMGALORE } from './subworkflows/nf-core/fastq_fastqc_umitools_trimgalore/main'
+include { UMITOOLS_EXTRACT } from './modules/nf-core/umitools/extract/main'
+include { BBMAP_BBMERGE } from './modules/nf-core/bbmap/bbmerge/main'
 include { BOWTIE_BUILD } from './modules/nf-core/bowtie/build/main'
 include { BOWTIE_ALIGN } from './modules/nf-core/bowtie/align/main'
 include { SAMTOOLS_SORT } from './modules/nf-core/samtools/sort/main'
@@ -106,43 +107,26 @@ workflow {
     //   paired-end: [ [id, condition, single_end:false], [ /path/to/R1.fastq.gz, /path/to/R2.fastq.gz ] ]
     reads_ch = parse_samplesheet(params.input)
 
-    // -- 2. Extract UMIs --------------------------------------------------------
-    // UMI-tools reads the UMI from the read header (default) or from a defined
-    // pattern position. It moves the UMI sequence into the read name so that
-    // downstream deduplication can group reads by their UMI later.
-    //
-    // The nf-core umitools/extract module expects: [ meta, [ fastq ] ]
-    // We add an extra map() to wrap the single FASTQ in a list as required.
-    // UMITOOLS_EXTRACT(
-    //     reads_ch.map { meta, fq -> [ meta, [ fq ] ] },
-    //     params.umi_pattern
-    // )
+    // -- 2. Extract UMIs from raw reads ----------------------------------------
+    // UMI-tools extracts UMIs based on the specified pattern and appends them to
+    // the read headers.
+    UMITOOLS_EXTRACT( reads_ch, params.umi_pattern )
 
-    // -- 3. Trim adapters -------------------------------------------------------
-    // Removes Illumina adapter sequences and low-quality bases from read ends.
-    // For sgRNA screens this is especially important: reads must be trimmed
-    // to the exact length of the sgRNA (typically 20 bp) for accurate alignment.
-    // TRIMGALORE( UMITOOLS_EXTRACT.out.reads )
+    // -- 3. BBMerge ------------------------------------------------
+    // Merge paired end reads to single read.
 
-    // -- 2. Extract UMIs + Trim adapters --------------------------------------------------------
-    // We can combine UMI extraction and adapter trimming into a single step using the nf-core
-    // fastq_fastqc_umitools_trimgalore subworkflow. This runs UMI-tools extract and Trim Galore
-    // together, and also produces FastQC reports for both raw and processed reads.
-    FASTQ_FASTQC_UMITOOLS_TRIMGALORE(
-        reads_ch,
-        params.skip_fastqc,
-        params.with_umi,
-        params.skip_umi_extract,
-        params.skip_trimming,
-        params.umi_discard_read,
-        params.min_trimmed_reads
-    )
+    BBMAP_BBMERGE( UMITOOLS_EXTRACT.out.reads, params.interleave )
+
+    // -- 4. Trim adapter sequences -----------------------------------------------
+    // Trim Galore removes adapter sequences and low-quality bases from the reads.
+    // Trim to custom adapter sequences to remove non sgRNA sequence from amplicon.
+
 
     // -- 4. Build Bowtie index from sgRNA library FASTA -------------------------
     // Bowtie needs to pre-process the FASTA into an index before aligning.
     // We only need to build this ONCE regardless of how many samples we have,
     // so we pass the library as a plain file (not a channel of per-sample files).
-    BOWTIE_BUILD(
+    BOWTIE_BUILD( 
         [ [id: 'sgrna_library'], file(params.sgrna_library) ]
     )
 
@@ -151,7 +135,7 @@ workflow {
     // We combine each sample's trimmed reads with the single shared index.
     // .combine() pairs every item in TRIMGALORE.out.reads with the bowtie index.
     BOWTIE_ALIGN(
-        FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.reads.combine( BOWTIE_BUILD.out.index )
+        UMITOOLS_EXTRACT.out.reads.combine( BOWTIE_BUILD.out.index )
     )
 
     // -- 6. Sort BAM ------------------------------------------------------------
