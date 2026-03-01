@@ -15,26 +15,6 @@
 ========================================================================================
 */
 
-// ── Parameters ────────────────────────────────────────────────────────────────
-// These are the inputs your pipeline needs. You can override any of these on the
-// command line with --param_name value, e.g. --input samplesheet.csv
-
-params.input          = null           // Path to samplesheet CSV (see format below)
-params.sgrna_library  = null           // Path to sgRNA library FASTA
-params.interleave     = false          // Whether input FASTQs are interleaved (true/false)
-params.mageck_control = null           // File listing control sgRNA IDs (one per line)
-params.mageck_treatment_id = null      // Sample label(s) for treatment in MAGeCK test e.g. "day14_rep1,day14_rep2"
-params.mageck_control_id   = null      // Sample label(s) for control in MAGeCK test e.g. "day0_plasmid"
-params.skip_fastqc    = false          // Whether to skip FastQC steps (true/false)
-params.with_umi       = true           // Whether to perform UMI extraction (true/false
-params.skip_umi_extract = false       // Whether to skip UMI extraction step (true/false)
-params.skip_trimming  = false          // Whether to skip adapter trimming (true/false)
-params.min_trimmed_reads = 10          // Minimum number of reads after trimming to keep sample (integer > 0)
-params.umi_pattern    = 'NNNNNNNNNN'     // UMI pattern: N = UMI base, X = non-UMI base
-params.outdir         = 'results'
-params.genome         = null           // Not used for sgRNA mapping, but kept for extensibility
-params.dedup_stats    = true          // Whether to generate UMI-tools dedup stats (true/false)
-
 // ── Import nf-core modules ────────────────────────────────────────────────────
 // Each 'include' pulls in a self-contained process from the modules/ directory.
 // After running `nf-core modules install <module>` these files will live under:
@@ -96,10 +76,10 @@ workflow {
 
     // ── Input validation ───────────────────────────────────────────────────────
     if (!params.input)               { error "Please provide a samplesheet with --input" }
-    if (!params.sgrna_library)       { error "Please provide an sgRNA library FASTA with --sgrna_library" }
-    if (!params.mageck_control)      { error "Please provide a control sgRNA list with --mageck_control" }
-    if (!params.mageck_treatment_id) { error "Please provide treatment sample ID(s) with --mageck_treatment_id" }
-    if (!params.mageck_control_id)   { error "Please provide control sample ID(s) with --mageck_control_id" }
+    // if (!params.sgrna_library)       { error "Please provide an sgRNA library FASTA with --sgrna_library" }
+    // if (!params.mageck_control)      { error "Please provide a control sgRNA list with --mageck_control" }
+    // if (!params.mageck_treatment_id) { error "Please provide treatment sample ID(s) with --mageck_treatment_id" }
+    // if (!params.mageck_control_id)   { error "Please provide control sample ID(s) with --mageck_control_id" }
 
     // -- 1. Load reads from samplesheet ----------------------------------------
     // 'reads_ch' holds tuples of:
@@ -110,12 +90,17 @@ workflow {
     // -- 2. Extract UMIs from raw reads ----------------------------------------
     // UMI-tools extracts UMIs based on the specified pattern and appends them to
     // the read headers.
-    UMITOOLS_EXTRACT( reads_ch, params.umi_pattern )
+    umi_reads = channel.empty()
+    UMITOOLS_EXTRACT( reads_ch )
+    umi_reads = UMITOOLS_EXTRACT.out.reads
+    umi_log = UMITOOLS_EXTRACT.out.log
 
     // -- 3. BBMerge ------------------------------------------------
     // Merge paired end reads to single read.
-
-    BBMAP_BBMERGE( UMITOOLS_EXTRACT.out.reads, params.interleave )
+    merged_reads = channel.empty()
+    BBMAP_BBMERGE( umi_reads, params.interleave )
+    merged_reads = BBMAP_BBMERGE.out.merged
+    bbmerge_log = BBMAP_BBMERGE.out.log
 
     // -- 4. Trim adapter sequences -----------------------------------------------
     // Trim Galore removes adapter sequences and low-quality bases from the reads.
@@ -126,28 +111,28 @@ workflow {
     // Bowtie needs to pre-process the FASTA into an index before aligning.
     // We only need to build this ONCE regardless of how many samples we have,
     // so we pass the library as a plain file (not a channel of per-sample files).
-    BOWTIE_BUILD( 
-        [ [id: 'sgrna_library'], file(params.sgrna_library) ]
-    )
+    // BOWTIE_BUILD( 
+    //     [ [id: 'sgrna_library'], file(params.sgrna_library) ]
+    // )
 
     // -- 5. Align reads to sgRNA library ----------------------------------------
     // Bowtie v1 is used here because sgRNA sequences are short (~20 bp).
     // We combine each sample's trimmed reads with the single shared index.
     // .combine() pairs every item in TRIMGALORE.out.reads with the bowtie index.
-    BOWTIE_ALIGN(
-        UMITOOLS_EXTRACT.out.reads.combine( BOWTIE_BUILD.out.index )
-    )
+    // BOWTIE_ALIGN(
+    //     UMITOOLS_EXTRACT.out.reads.combine( BOWTIE_BUILD.out.index )
+    // )
 
     // -- 6. Sort BAM ------------------------------------------------------------
     // Alignments come out of Bowtie in the order they were processed (not
     // coordinate order). SAMtools sort reorders them by genomic/library position,
     // which is required for indexing and for UMI deduplication.
-    SAMTOOLS_SORT( BOWTIE_ALIGN.out.bam )
+    // SAMTOOLS_SORT( BOWTIE_ALIGN.out.bam )
 
     // -- 7. Index BAM -----------------------------------------------------------
     // Creates a .bai index file alongside the BAM. This lets tools rapidly
     // look up reads at any position without scanning the whole file.
-    SAMTOOLS_INDEX( SAMTOOLS_SORT.out.bam )
+    // SAMTOOLS_INDEX( SAMTOOLS_SORT.out.bam )
 
     // -- 8. Deduplicate by UMI --------------------------------------------------
     // UMI-tools groups reads that:
@@ -157,10 +142,10 @@ workflow {
     // This removes PCR duplicates that could inflate counts for some sgRNAs.
     //
     // We join the sorted BAM with its index file so the tool can access both.
-    bam_bai_ch = SAMTOOLS_SORT.out.bam
-        .join( SAMTOOLS_INDEX.out.bai )
+    // bam_bai_ch = SAMTOOLS_SORT.out.bam
+    //     .join( SAMTOOLS_INDEX.out.bai )
 
-    UMITOOLS_DEDUP( bam_bai_ch, params.dedup_stats )
+    // UMITOOLS_DEDUP( bam_bai_ch, params.dedup_stats )
 
     // -- 9. MAGeCK count --------------------------------------------------------
     // Because we did our OWN alignment (Bowtie) and deduplication (UMI-tools),
@@ -174,20 +159,20 @@ workflow {
     //
     // We collect all per-sample BAMs and bundle them under a single meta map,
     // because MAGeCK count runs once across ALL samples together.
-    ch_bams_collected = UMITOOLS_DEDUP.out.bam
-        .collect { meta, bam -> bam }
-        .map { bams ->
-            def combined_meta = [
-                id            : 'all_samples',
-                sample_labels : UMITOOLS_DEDUP.out.bam.collect { meta, bam -> meta.id }.join(',')
-            ]
-            [ combined_meta, bams ]
-        }
+    // ch_bams_collected = UMITOOLS_DEDUP.out.bam
+    //     .collect { meta, bam -> bam }
+    //     .map { bams ->
+    //         def combined_meta = [
+    //             id            : 'all_samples',
+    //             sample_labels : UMITOOLS_DEDUP.out.bam.collect { meta, bam -> meta.id }.join(',')
+    //         ]
+    //         [ combined_meta, bams ]
+    //     }
 
-    MAGECK_COUNT(
-        ch_bams_collected,
-        file(params.sgrna_library)
-    )
+    // MAGECK_COUNT(
+    //     ch_bams_collected,
+    //     file(params.sgrna_library)
+    // )
 
     // -- 10. MAGeCK test (RRA ranking) -----------------------------------------
     // MAGeCK test uses the count table to rank sgRNAs and genes by depletion
@@ -204,12 +189,12 @@ workflow {
     // IMPORTANT: Replace 'treatment_sample_name' and 'control_sample_name' below
     // with the actual sample IDs from your samplesheet (they must match the
     // column headers in the count table produced by MAGECK_COUNT).
-    MAGECK_TEST(
-        MAGECK_COUNT.out.count_table,
-        params.mageck_treatment_id,   // e.g. "day14_rep1,day14_rep2"
-        params.mageck_control_id,     // e.g. "day0_plasmid"
-        file(params.mageck_control)   // non-targeting control sgRNA list (one per line)
-    )
+    // MAGECK_TEST(
+    //     MAGECK_COUNT.out.count_table,
+    //     params.mageck_treatment_id,   // e.g. "day14_rep1,day14_rep2"
+    //     params.mageck_control_id,     // e.g. "day0_plasmid"
+    //     file(params.mageck_control)   // non-targeting control sgRNA list (one per line)
+    // )
 
     // ── Workflow completion summary ────────────────────────────────────────────
     workflow.onComplete {
