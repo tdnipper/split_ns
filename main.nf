@@ -196,15 +196,16 @@ workflow {
     //     file(params.mageck_control)   // non-targeting control sgRNA list (one per line)
     // )
 
-    // ── Workflow completion summary ────────────────────────────────────────────
-    workflow.onComplete {
-        log.info """
-        ========================================
-        Pipeline complete!
-        Status   : ${ workflow.success ? 'SUCCESS' : 'FAILED' }
-        Results  : ${params.outdir}
-        Duration : ${workflow.duration}
-        ========================================
-        """.stripIndent()
-    }
+}
+
+// ── Workflow completion summary ────────────────────────────────────────────
+workflow.onComplete {
+    log.info """
+    ========================================
+    Pipeline complete!
+    Status   : ${ workflow.success ? 'SUCCESS' : 'FAILED' }
+    Results  : ${params.outdir}
+    Duration : ${workflow.duration}
+    ========================================
+    """.stripIndent()
 }
