@@ -1,2 +1,2 @@
 sample,fastq_1,fastq_2,condition
-test,subsampled_reads/subsampled_reads/minicomp-P0-su200_S62_L001_R1_001.subsample.fastq.gz,subsampled_reads/subsampled_reads/minicomp-P0-su200_S62_L001_R2_001.subsample.fastq.gz,test
+test,subsampled_reads/minicomp-P0-su200_S62_L001_R1_001.subsample.fastq.gz,subsampled_reads/minicomp-P0-su200_S62_L001_R2_001.subsample.fastq.gz,test
