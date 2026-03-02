@@ -22,6 +22,7 @@
 
 include { UMITOOLS_EXTRACT } from './modules/nf-core/umitools/extract/main'
 include { BBMAP_BBMERGE } from './modules/nf-core/bbmap/bbmerge/main'
+include { TRIMGALORE } from './modules/nf-core/trimgalore/main'
 include { BOWTIE_BUILD } from './modules/nf-core/bowtie/build/main'
 include { BOWTIE_ALIGN } from './modules/nf-core/bowtie/align/main'
 include { SAMTOOLS_SORT } from './modules/nf-core/samtools/sort/main'
@@ -105,7 +106,11 @@ workflow {
     // -- 4. Trim adapter sequences -----------------------------------------------
     // Trim Galore removes adapter sequences and low-quality bases from the reads.
     // Trim to custom adapter sequences to remove non sgRNA sequence from amplicon.
-
+    trimmed_reads = channel.empty()
+    TRIMGALORE( merged_reads )
+    trimmed_reads = TRIMGALORE.out.reads
+    trim_log = TRIMGALORE.out.log
+    trim_versions = TRIMGALORE.out.versions_trimgalore
 
     // -- 4. Build Bowtie index from sgRNA library FASTA -------------------------
     // Bowtie needs to pre-process the FASTA into an index before aligning.
