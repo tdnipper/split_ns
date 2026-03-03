@@ -79,30 +79,33 @@ workflow {
 
     // ── Input validation ───────────────────────────────────────────────────────
     if (!params.input)               { error "Please provide a samplesheet with --input" }
-    // if (!params.sgrna_library)       { error "Please provide an sgRNA library FASTA with --sgrna_library" }
+    if (!params.sgrna_library)       { error "Please provide an sgRNA library FASTA with --sgrna_library" }
     // if (!params.mageck_control)      { error "Please provide a control sgRNA list with --mageck_control" }
     // if (!params.mageck_treatment_id) { error "Please provide treatment sample ID(s) with --mageck_treatment_id" }
     // if (!params.mageck_control_id)   { error "Please provide control sample ID(s) with --mageck_control_id" }
 
+    ch_multiqc_files = channel.empty()
+
     // -- 1. Load reads from samplesheet ----------------------------------------
-    // 'reads_ch' holds tuples of:
+    // 'ch_reads' holds tuples of:
     //   single-end: [ [id, condition, single_end:true],  [ /path/to/file.fastq.gz ] ]
     //   paired-end: [ [id, condition, single_end:false], [ /path/to/R1.fastq.gz, /path/to/R2.fastq.gz ] ]
-    reads_ch = parse_samplesheet(params.input)
+    ch_reads = parse_samplesheet(params.input)
 
     // -- 2. FastQC on raw reads ------------------------------------------------
-    FASTQC( reads_ch )
+    FASTQC( ch_reads )
     fastqc_html = FASTQC.out.html
     fastqc_zip  = FASTQC.out.zip
-    fastqc_versions = FASTQC.out.versions_fastqc
+    ch_multiqc_files = ch_multiqc_files.mix( fastqc_html, fastqc_zip )
 
     // -- 2. Extract UMIs from raw reads ----------------------------------------
     // UMI-tools extracts UMIs based on the specified pattern and appends them to
     // the read headers.
     umi_reads = channel.empty()
-    UMITOOLS_EXTRACT( reads_ch )
+    UMITOOLS_EXTRACT( ch_reads )
     umi_reads = UMITOOLS_EXTRACT.out.reads
     umi_log = UMITOOLS_EXTRACT.out.log
+    ch_multiqc_files = ch_multiqc_files.mix( umi_log )
 
     // -- 3. BBMerge ------------------------------------------------
     // Merge paired end reads to single read.
@@ -110,6 +113,7 @@ workflow {
     BBMAP_BBMERGE( umi_reads, params.interleave )
     merged_reads = BBMAP_BBMERGE.out.merged
     bbmerge_log = BBMAP_BBMERGE.out.log
+    ch_multiqc_files = ch_multiqc_files.mix( bbmerge_log )
 
     // -- 4. Trim adapter sequences -----------------------------------------------
     // Trim Galore removes adapter sequences and low-quality bases from the reads.
@@ -118,7 +122,7 @@ workflow {
     TRIMGALORE( merged_reads )
     trimmed_reads = TRIMGALORE.out.reads
     trim_log = TRIMGALORE.out.log
-    trim_versions = TRIMGALORE.out.versions_trimgalore
+    ch_multiqc_files = ch_multiqc_files.mix( trim_log )
 
     //-- 4. Build Bowtie index from sgRNA library FASTA -------------------------
     // Bowtie needs to pre-process the FASTA into an index before aligning.
@@ -213,10 +217,38 @@ workflow {
     // MultiQC aggregates all the QC reports (FastQC, BBMerge stats, UMI-tools logs)
     // into a single interactive HTML report. This gives a nice overview of data
     // quality and processing metrics across all samples.
+    ch_name_replacements = ch_reads
+        .map{ meta, reads ->
+            def paired = reads[0][1] as boolean
+            def suffixes = paired ? ['_1', '_2'] : ['']
+            def mappings = []
+
+            def fastq1_simplename = file(reads[0][0]).simpleName
+            if (fastq1_simplename != meta.id) {
+                mappings << [fastq1_simplename, "${meta.id}${suffixes[0]}"]
+                if (paired) {
+                    mappings << [file(reads[0][1]).simpleName, "${meta.id}${suffixes[1]}"]
+                }
+            }
+
+            return mappings.collect { mapping -> mapping.join('\t') }
+        }
+        .flatten()
+        .collectFile(name: 'name_replacement.txt', newLine: true)
+        .ifEmpty([])
+
+    ch_multiqc_config        = channel.fromPath("$projectDir/modules/nf-core/multiqc/multiqc_config.yml", checkIfExists: true)
+    ch_multiqc_logo          = params.multiqc_logo   ? channel.fromPath(params.multiqc_logo)   : channel.empty()
+    ch_multiqc_sample_names = params.multiqc_sample_names ? channel.fromPath(params.multiqc_sample_names) : channel.value([])
     MULTIQC(
-        [ fastqc_html, bbmerge_log, umi_log ],
-        params.outdir
+        channel.of([[id: 'multiqc']])
+            .combine( ch_multiqc_files.collect() )
+            .combine( ch_multiqc_config.toList() )
+            .combine( ch_multiqc_logo.toList() )
+            .combine( ch_name_replacements )
+            .combine( ch_multiqc_sample_names )
     )
+    ch_multiqc_report = MULTIQC.out.report
 
 }
 
