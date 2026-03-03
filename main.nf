@@ -112,21 +112,21 @@ workflow {
     trim_log = TRIMGALORE.out.log
     trim_versions = TRIMGALORE.out.versions_trimgalore
 
-    // -- 4. Build Bowtie index from sgRNA library FASTA -------------------------
+    //-- 4. Build Bowtie index from sgRNA library FASTA -------------------------
     // Bowtie needs to pre-process the FASTA into an index before aligning.
     // We only need to build this ONCE regardless of how many samples we have,
     // so we pass the library as a plain file (not a channel of per-sample files).
-    // BOWTIE_BUILD( 
-    //     [ [id: 'sgrna_library'], file(params.sgrna_library) ]
-    // )
+    BOWTIE_BUILD( 
+        [ [id: 'sgrna_library'], file(params.sgrna_library) ]
+    )
 
     // -- 5. Align reads to sgRNA library ----------------------------------------
     // Bowtie v1 is used here because sgRNA sequences are short (~20 bp).
     // We combine each sample's trimmed reads with the single shared index.
     // .combine() pairs every item in TRIMGALORE.out.reads with the bowtie index.
-    // BOWTIE_ALIGN(
-    //     UMITOOLS_EXTRACT.out.reads.combine( BOWTIE_BUILD.out.index )
-    // )
+    BOWTIE_ALIGN(
+        umi_reads, BOWTIE_BUILD.out.index, true
+    )
 
     // -- 6. Sort BAM ------------------------------------------------------------
     // Alignments come out of Bowtie in the order they were processed (not
