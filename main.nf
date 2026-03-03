@@ -112,6 +112,7 @@ workflow {
     merged_reads = channel.empty()
     BBMAP_BBMERGE( umi_reads, params.interleave )
     merged_reads = BBMAP_BBMERGE.out.merged
+        .map { meta, reads -> [ meta + [single_end: true], reads ] }
     bbmerge_log = BBMAP_BBMERGE.out.log
     ch_multiqc_files = ch_multiqc_files.mix( bbmerge_log )
 
