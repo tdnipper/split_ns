@@ -20,6 +20,7 @@
 // After running `nf-core modules install <module>` these files will live under:
 //   modules/nf-core/<tool>/<subtool>/main.nf
 
+include { FASTQC } from './modules/nf-core/fastqc/main'
 include { UMITOOLS_EXTRACT } from './modules/nf-core/umitools/extract/main'
 include { BBMAP_BBMERGE } from './modules/nf-core/bbmap/bbmerge/main'
 include { BOWTIE_BUILD } from './modules/nf-core/bowtie/build/main'
@@ -29,6 +30,7 @@ include { SAMTOOLS_INDEX } from './modules/nf-core/samtools/index/main'
 include { UMITOOLS_DEDUP } from './modules/nf-core/umitools/dedup/main'
 include { MAGECK_COUNT } from './modules/nf-core/mageck/count/main'
 include { MAGECK_TEST } from './modules/nf-core/mageck/test/main'
+include { MULTIQC } from './modules/nf-core/multiqc/main'
 
 // ── Helper: parse samplesheet ─────────────────────────────────────────────────
 /*
@@ -86,6 +88,12 @@ workflow {
     //   single-end: [ [id, condition, single_end:true],  [ /path/to/file.fastq.gz ] ]
     //   paired-end: [ [id, condition, single_end:false], [ /path/to/R1.fastq.gz, /path/to/R2.fastq.gz ] ]
     reads_ch = parse_samplesheet(params.input)
+
+    // -- 2. FastQC on raw reads ------------------------------------------------
+    FASTQC( reads_ch )
+    fastqc_html = FASTQC.out.html
+    fastqc_zip  = FASTQC.out.zip
+    fastqc_versions = FASTQC.out.versions_fastqc
 
     // -- 2. Extract UMIs from raw reads ----------------------------------------
     // UMI-tools extracts UMIs based on the specified pattern and appends them to
@@ -195,6 +203,15 @@ workflow {
     //     params.mageck_control_id,     // e.g. "day0_plasmid"
     //     file(params.mageck_control)   // non-targeting control sgRNA list (one per line)
     // )
+
+    // FINAL -- MultiQC
+    // MultiQC aggregates all the QC reports (FastQC, BBMerge stats, UMI-tools logs)
+    // into a single interactive HTML report. This gives a nice overview of data
+    // quality and processing metrics across all samples.
+    MULTIQC(
+        [ fastqc_html, bbmerge_log, umi_log ],
+        params.outdir
+    )
 
 }
 
