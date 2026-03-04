@@ -136,12 +136,11 @@ workflow {
     ch_multiqc_files = ch_multiqc_files.mix( ch_cutadapt_log )
 
     //-- 4. Build Bowtie index from sgRNA library FASTA -------------------------
-    // Bowtie needs to pre-process the FASTA into an index before aligning.
-    // We only need to build this ONCE regardless of how many samples we have,
-    // so we pass the library as a plain file (not a channel of per-sample files).
-    BOWTIE_BUILD( 
-        [ [id: 'sgrna_library'], file(params.sgrna_library) ]
-    )
+    ch_library = Channel
+        .fromPath(params.sgrna_library, checkIfExists: true)
+        .map { lib -> [ [id: 'sgrna_library'], lib ] }
+
+    BOWTIE_BUILD(ch_library)
 
     // -- 5. Align reads to sgRNA library ----------------------------------------
     // Bowtie v1 is used here because sgRNA sequences are short (~20 bp).
@@ -157,13 +156,10 @@ workflow {
     // Alignments come out of Bowtie in the order they were processed (not
     // coordinate order). SAMtools sort reorders them by genomic/library position,
     // which is required for indexing and for UMI deduplication.
-    // SAMTOOLS_SORT( ch_aligned_reads )
-
-    // -- 7. Index BAM -----------------------------------------------------------
-    // Creates a .bai index file alongside the BAM. This lets tools rapidly
-    // look up reads at any position without scanning the whole file.
-    // SAMTOOLS_INDEX( SAMTOOLS_SORT.out.bam )
-
+    ch_sorted_indexed_bams = channel.empty()
+    SAMTOOLS_SORT( ch_aligned_reads, ch_library, params.index_format )
+    ch_sorted_indexed_bams = SAMTOOLS_SORT.out.bam
+    
     // -- 8. Deduplicate by UMI --------------------------------------------------
     // UMI-tools groups reads that:
     //   (a) map to the same genomic position, AND
@@ -231,8 +227,8 @@ workflow {
     // into a single interactive HTML report. This gives a nice overview of data
     // quality and processing metrics across all samples.
     ch_name_replacements = ch_reads
-        .map{ meta, reads ->
-            def paired = reads[0][1] as boolean
+        .map { meta, reads ->
+            def paired = !meta.single_end
             def suffixes = paired ? ['_1', '_2'] : ['']
             def mappings = []
 
