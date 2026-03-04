@@ -147,15 +147,17 @@ workflow {
     // Bowtie v1 is used here because sgRNA sequences are short (~20 bp).
     // We combine each sample's trimmed reads with the single shared index.
     // .combine() pairs every item in TRIMGALORE.out.reads with the bowtie index.
+    ch_aligned_reads = channel.empty()
     BOWTIE_ALIGN(
         ch_trimmed_reads, BOWTIE_BUILD.out.index, true
     )
+    ch_aligned_reads = BOWTIE_ALIGN.out.bam
 
     // -- 6. Sort BAM ------------------------------------------------------------
     // Alignments come out of Bowtie in the order they were processed (not
     // coordinate order). SAMtools sort reorders them by genomic/library position,
     // which is required for indexing and for UMI deduplication.
-    // SAMTOOLS_SORT( BOWTIE_ALIGN.out.bam )
+    // SAMTOOLS_SORT( ch_aligned_reads )
 
     // -- 7. Index BAM -----------------------------------------------------------
     // Creates a .bai index file alongside the BAM. This lets tools rapidly
