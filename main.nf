@@ -158,7 +158,7 @@ workflow {
     // which is required for indexing and for UMI deduplication.
     ch_sorted_indexed_bams = channel.empty()
     SAMTOOLS_SORT( ch_aligned_reads, ch_library, params.index_format )
-    ch_sorted_indexed_bams = SAMTOOLS_SORT.out.bam
+    ch_sorted_indexed_bams = SAMTOOLS_SORT.out.bam .join( SAMTOOLS_SORT.out.bai )
     
     // -- 8. Deduplicate by UMI --------------------------------------------------
     // UMI-tools groups reads that:
@@ -166,13 +166,12 @@ workflow {
     //   (b) share the same UMI sequence
     // and collapses them into a single representative read.
     // This removes PCR duplicates that could inflate counts for some sgRNAs.
-    //
-    // We join the sorted BAM with its index file so the tool can access both.
-    // bam_bai_ch = SAMTOOLS_SORT.out.bam
-    //     .join( SAMTOOLS_INDEX.out.bai )
-
-    // UMITOOLS_DEDUP( bam_bai_ch, params.dedup_stats )
-
+    dedup_bams = channel.empty()
+    UMITOOLS_DEDUP( ch_sorted_indexed_bams, params.dedup_stats )
+    dedup_bams = UMITOOLS_DEDUP.out.bam
+    dedup_log = UMITOOLS_DEDUP.out.log
+    ch_multiqc_files = ch_multiqc_files.mix( dedup_log )
+    
     // -- 9. MAGeCK count --------------------------------------------------------
     // Because we did our OWN alignment (Bowtie) and deduplication (UMI-tools),
     // we pass the deduplicated BAMs directly to `mageck count --bam`.
