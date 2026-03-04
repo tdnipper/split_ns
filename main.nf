@@ -81,6 +81,7 @@ workflow {
     // ── Input validation ───────────────────────────────────────────────────────
     if (!params.input)               { error "Please provide a samplesheet with --input" }
     if (!params.sgrna_library)       { error "Please provide an sgRNA library FASTA with --sgrna_library" }
+    if (!params.mageck_library)       { error "Please provide an sgRNA library .txt or .csv file with --mageck_library" }
     // if (!params.mageck_control)      { error "Please provide a control sgRNA list with --mageck_control" }
     // if (!params.mageck_treatment_id) { error "Please provide treatment sample ID(s) with --mageck_treatment_id" }
     // if (!params.mageck_control_id)   { error "Please provide control sample ID(s) with --mageck_control_id" }
@@ -99,7 +100,7 @@ workflow {
     fastqc_zip  = FASTQC.out.zip
     ch_multiqc_files = ch_multiqc_files.mix( fastqc_html, fastqc_zip )
 
-    // -- 2. Extract UMIs from raw reads ----------------------------------------
+    // -- 3. Extract UMIs from raw reads ----------------------------------------
     // UMI-tools extracts UMIs based on the specified pattern and appends them to
     // the read headers.
     umi_reads = channel.empty()
@@ -108,7 +109,7 @@ workflow {
     umi_log = UMITOOLS_EXTRACT.out.log
     ch_multiqc_files = ch_multiqc_files.mix( umi_log )
 
-    // -- 3. BBMerge ------------------------------------------------
+    // -- 4. BBMerge ------------------------------------------------
     // Merge paired end reads to single read.
     merged_reads = channel.empty()
     BBMAP_BBMERGE( umi_reads, params.interleave )
@@ -116,17 +117,8 @@ workflow {
         .map { meta, reads -> [ meta + [single_end: true], reads ] }
     ch_bbmerge_log = BBMAP_BBMERGE.out.log
     ch_multiqc_files = ch_multiqc_files.mix( ch_bbmerge_log )
-
-    // -- 4. Trim adapter sequences -----------------------------------------------
-    // Trim Galore removes adapter sequences and low-quality bases from the reads.
-    // Trim to custom adapter sequences to remove non sgRNA sequence from amplicon.
-    // trimmed_reads = channel.empty()
-    // TRIMGALORE( merged_reads )
-    // trimmed_reads = TRIMGALORE.out.reads
-    // trim_log = TRIMGALORE.out.log
-    // ch_multiqc_files = ch_multiqc_files.mix( trim_log )
     
-    // -- 4. Trim adapter sequences -----------------------------------------------
+    // -- 5. Trim adapter sequences -----------------------------------------------
     // Cutadapt removes adapter sequences and low-quality bases from the reads.
     // Trim to custom adapter sequences to remove non sgRNA sequence from amplicon.
     ch_trimmed_reads = channel.empty()
@@ -135,14 +127,14 @@ workflow {
     ch_cutadapt_log = CUTADAPT.out.log
     ch_multiqc_files = ch_multiqc_files.mix( ch_cutadapt_log )
 
-    //-- 4. Build Bowtie index from sgRNA library FASTA -------------------------
+    //-- 6. Build Bowtie index from sgRNA library FASTA -------------------------
     ch_library = Channel
         .fromPath(params.sgrna_library, checkIfExists: true)
         .map { lib -> [ [id: 'sgrna_library'], lib ] }
 
     BOWTIE_BUILD(ch_library)
 
-    // -- 5. Align reads to sgRNA library ----------------------------------------
+    // -- 7. Align reads to sgRNA library ----------------------------------------
     // Bowtie v1 is used here because sgRNA sequences are short (~20 bp).
     // We combine each sample's trimmed reads with the single shared index.
     // .combine() pairs every item in TRIMGALORE.out.reads with the bowtie index.
@@ -152,7 +144,7 @@ workflow {
     )
     ch_aligned_reads = BOWTIE_ALIGN.out.bam
 
-    // -- 6. Sort BAM ------------------------------------------------------------
+    // -- 8. Sort BAM ------------------------------------------------------------
     // Alignments come out of Bowtie in the order they were processed (not
     // coordinate order). SAMtools sort reorders them by genomic/library position,
     // which is required for indexing and for UMI deduplication.
@@ -160,44 +152,40 @@ workflow {
     SAMTOOLS_SORT( ch_aligned_reads, ch_library, params.index_format )
     ch_sorted_indexed_bams = SAMTOOLS_SORT.out.bam .join( SAMTOOLS_SORT.out.bai )
     
-    // -- 8. Deduplicate by UMI --------------------------------------------------
+    // -- 9. Deduplicate by UMI --------------------------------------------------
     // UMI-tools groups reads that:
     //   (a) map to the same genomic position, AND
     //   (b) share the same UMI sequence
     // and collapses them into a single representative read.
     // This removes PCR duplicates that could inflate counts for some sgRNAs.
-    dedup_bams = channel.empty()
+    ch_dedup_bams = channel.empty()
     UMITOOLS_DEDUP( ch_sorted_indexed_bams, params.dedup_stats )
-    dedup_bams = UMITOOLS_DEDUP.out.bam
-    dedup_log = UMITOOLS_DEDUP.out.log
-    ch_multiqc_files = ch_multiqc_files.mix( dedup_log )
+    ch_dedup_bams = UMITOOLS_DEDUP.out.bam
+    ch_dedup_log = UMITOOLS_DEDUP.out.log
+    ch_multiqc_files = ch_multiqc_files.mix( ch_dedup_log )
     
-    // -- 9. MAGeCK count --------------------------------------------------------
+    // -- 10. MAGeCK count --------------------------------------------------------
     // Because we did our OWN alignment (Bowtie) and deduplication (UMI-tools),
     // we pass the deduplicated BAMs directly to `mageck count --bam`.
     // This skips MAGeCK's internal alignment and uses our cleaner, UMI-deduped
     // read counts instead.
     //
-    // The nf-core mageck/count module expects:
-    //   input[0]: tuple val(meta), path(bam_files)   <- all BAMs bundled together
-    //   input[1]: path(library)                       <- sgRNA library FASTA/CSV
-    //
     // We collect all per-sample BAMs and bundle them under a single meta map,
     // because MAGeCK count runs once across ALL samples together.
-    // ch_bams_collected = UMITOOLS_DEDUP.out.bam
+    // ch_bams_collected = ch_dedup_bams
     //     .collect { meta, bam -> bam }
     //     .map { bams ->
     //         def combined_meta = [
     //             id            : 'all_samples',
-    //             sample_labels : UMITOOLS_DEDUP.out.bam.collect { meta, bam -> meta.id }.join(',')
+    //             sample_labels : ch_dedup_bams.collect { meta, bam -> meta.id }.join(',')
     //         ]
     //         [ combined_meta, bams ]
     //     }
 
-    // MAGECK_COUNT(
-    //     ch_bams_collected,
-    //     file(params.sgrna_library)
-    // )
+    MAGECK_COUNT(
+        ch_dedup_bams,
+        file(params.mageck_library)
+    )
 
     // -- 10. MAGeCK test (RRA ranking) -----------------------------------------
     // MAGeCK test uses the count table to rank sgRNAs and genes by depletion
@@ -248,15 +236,15 @@ workflow {
     ch_multiqc_config        = channel.fromPath("$projectDir/modules/nf-core/multiqc/multiqc_config.yml", checkIfExists: true)
     ch_multiqc_logo          = params.multiqc_logo   ? channel.fromPath(params.multiqc_logo)   : channel.empty()
     ch_multiqc_sample_names = params.multiqc_sample_names ? channel.fromPath(params.multiqc_sample_names) : channel.value([])
-    // MULTIQC(
-    //     channel.of([[id: 'multiqc']])
-    //         .combine( ch_multiqc_files.collect() )
-    //         .combine( ch_multiqc_config.toList() )
-    //         .combine( ch_multiqc_logo.toList() )
-    //         .combine( ch_name_replacements )
-    //         .combine( ch_multiqc_sample_names )
-    // )
-    // ch_multiqc_report = MULTIQC.out.report
+    MULTIQC(
+        channel.of([[id: 'multiqc']])
+            .combine( ch_multiqc_files.collect() )
+            .combine( ch_multiqc_config.toList() )
+            .combine( ch_multiqc_logo.toList() )
+            .combine( ch_name_replacements )
+            .combine( ch_multiqc_sample_names )
+    )
+    ch_multiqc_report = MULTIQC.out.report
 
 }
 
