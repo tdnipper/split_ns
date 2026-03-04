@@ -26,6 +26,13 @@
                             "modules"
                         ]
                     },
+                    "cutadapt": {
+                        "branch": "master",
+                        "git_sha": "624977dfaf562211e68a8a868ca80acc8461f1ac",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
                     "fastqc": {
                         "branch": "master",
                         "git_sha": "3009f27c4e4b6e99da4eeebe82799e13924a4a1f",

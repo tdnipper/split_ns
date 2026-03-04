@@ -23,6 +23,7 @@
 include { FASTQC } from './modules/nf-core/fastqc/main'
 include { UMITOOLS_EXTRACT } from './modules/nf-core/umitools/extract/main'
 include { BBMAP_BBMERGE } from './modules/nf-core/bbmap/bbmerge/main'
+include { CUTADAPT } from './modules/nf-core/cutadapt/main'
 include { TRIMGALORE } from './modules/nf-core/trimgalore/main'
 include { BOWTIE_BUILD } from './modules/nf-core/bowtie/build/main'
 include { BOWTIE_ALIGN } from './modules/nf-core/bowtie/align/main'
@@ -113,17 +114,26 @@ workflow {
     BBMAP_BBMERGE( umi_reads, params.interleave )
     merged_reads = BBMAP_BBMERGE.out.merged
         .map { meta, reads -> [ meta + [single_end: true], reads ] }
-    bbmerge_log = BBMAP_BBMERGE.out.log
-    ch_multiqc_files = ch_multiqc_files.mix( bbmerge_log )
+    ch_bbmerge_log = BBMAP_BBMERGE.out.log
+    ch_multiqc_files = ch_multiqc_files.mix( ch_bbmerge_log )
 
     // -- 4. Trim adapter sequences -----------------------------------------------
     // Trim Galore removes adapter sequences and low-quality bases from the reads.
     // Trim to custom adapter sequences to remove non sgRNA sequence from amplicon.
-    trimmed_reads = channel.empty()
-    TRIMGALORE( merged_reads )
-    trimmed_reads = TRIMGALORE.out.reads
-    trim_log = TRIMGALORE.out.log
-    ch_multiqc_files = ch_multiqc_files.mix( trim_log )
+    // trimmed_reads = channel.empty()
+    // TRIMGALORE( merged_reads )
+    // trimmed_reads = TRIMGALORE.out.reads
+    // trim_log = TRIMGALORE.out.log
+    // ch_multiqc_files = ch_multiqc_files.mix( trim_log )
+    
+    // -- 4. Trim adapter sequences -----------------------------------------------
+    // Cutadapt removes adapter sequences and low-quality bases from the reads.
+    // Trim to custom adapter sequences to remove non sgRNA sequence from amplicon.
+    ch_trimmed_reads = channel.empty()
+    CUTADAPT( merged_reads )
+    ch_trimmed_reads = CUTADAPT.out.reads
+    ch_cutadapt_log = CUTADAPT.out.log
+    ch_multiqc_files = ch_multiqc_files.mix( ch_cutadapt_log )
 
     //-- 4. Build Bowtie index from sgRNA library FASTA -------------------------
     // Bowtie needs to pre-process the FASTA into an index before aligning.
@@ -138,7 +148,7 @@ workflow {
     // We combine each sample's trimmed reads with the single shared index.
     // .combine() pairs every item in TRIMGALORE.out.reads with the bowtie index.
     BOWTIE_ALIGN(
-        umi_reads, BOWTIE_BUILD.out.index, true
+        ch_trimmed_reads, BOWTIE_BUILD.out.index, true
     )
 
     // -- 6. Sort BAM ------------------------------------------------------------
@@ -241,15 +251,15 @@ workflow {
     ch_multiqc_config        = channel.fromPath("$projectDir/modules/nf-core/multiqc/multiqc_config.yml", checkIfExists: true)
     ch_multiqc_logo          = params.multiqc_logo   ? channel.fromPath(params.multiqc_logo)   : channel.empty()
     ch_multiqc_sample_names = params.multiqc_sample_names ? channel.fromPath(params.multiqc_sample_names) : channel.value([])
-    MULTIQC(
-        channel.of([[id: 'multiqc']])
-            .combine( ch_multiqc_files.collect() )
-            .combine( ch_multiqc_config.toList() )
-            .combine( ch_multiqc_logo.toList() )
-            .combine( ch_name_replacements )
-            .combine( ch_multiqc_sample_names )
-    )
-    ch_multiqc_report = MULTIQC.out.report
+    // MULTIQC(
+    //     channel.of([[id: 'multiqc']])
+    //         .combine( ch_multiqc_files.collect() )
+    //         .combine( ch_multiqc_config.toList() )
+    //         .combine( ch_multiqc_logo.toList() )
+    //         .combine( ch_name_replacements )
+    //         .combine( ch_multiqc_sample_names )
+    // )
+    // ch_multiqc_report = MULTIQC.out.report
 
 }
 
