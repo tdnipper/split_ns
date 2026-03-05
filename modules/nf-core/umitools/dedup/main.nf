@@ -37,7 +37,7 @@ process UMITOOLS_DEDUP {
     MPLCONFIGDIR=.tmp TMPDIR=.tmp PYTHONHASHSEED=0 umi_tools \\
         dedup \\
         -I $bam \\
-        -S ${prefix}.bam \\
+        -S ${prefix}_dedup.bam \\
         -L ${prefix}.log \\
         $stats \\
         $paired \\
@@ -47,7 +47,7 @@ process UMITOOLS_DEDUP {
     stub:
     prefix = task.ext.prefix ?: "${meta.id}"
     """
-    touch ${prefix}.bam
+    touch ${prefix}_dedup.bam
     touch ${prefix}.log
     touch ${prefix}_edit_distance.tsv
     touch ${prefix}_per_umi.tsv

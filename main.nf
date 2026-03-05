@@ -20,6 +20,7 @@
 // After running `nf-core modules install <module>` these files will live under:
 //   modules/nf-core/<tool>/<subtool>/main.nf
 
+include { FQ_LINT } from './modules/nf-core/fq/lint/main'
 include { FASTQC } from './modules/nf-core/fastqc/main'
 include { UMITOOLS_EXTRACT } from './modules/nf-core/umitools/extract/main'
 include { BBMAP_BBMERGE } from './modules/nf-core/bbmap/bbmerge/main'
@@ -93,6 +94,12 @@ workflow {
     //   single-end: [ [id, condition, single_end:true],  [ /path/to/file.fastq.gz ] ]
     //   paired-end: [ [id, condition, single_end:false], [ /path/to/R1.fastq.gz, /path/to/R2.fastq.gz ] ]
     ch_reads = parse_samplesheet(params.input)
+
+    // -- 2. Fastq Lint on paired-end reads ------------------------------------------------
+    ch_reads_paired = ch_reads.filter { meta, reads -> !meta.single_end }
+    FQ_LINT( ch_reads_paired )
+    ch_multiqc_files = ch_multiqc_files.mix( FQ_LINT.out.lint )
+    ch_versions_fq = FQ_LINT.out.versions_fq
 
     // -- 2. FastQC on raw reads ------------------------------------------------
     FASTQC( ch_reads )
