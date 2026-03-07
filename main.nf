@@ -98,14 +98,12 @@ workflow {
     // -- 2. Fastq Lint on paired-end reads ------------------------------------------------
     ch_reads_paired = ch_reads.filter { meta, reads -> !meta.single_end }
     FQ_LINT( ch_reads_paired )
-    ch_multiqc_files = ch_multiqc_files.mix( FQ_LINT.out.lint )
+    ch_multiqc_files = ch_multiqc_files.mix( FQ_LINT.out.lint.collect { _meta, lint -> lint } )
     ch_versions_fq = FQ_LINT.out.versions_fq
 
     // -- 2. FastQC on raw reads ------------------------------------------------
     FASTQC( ch_reads )
-    fastqc_html = FASTQC.out.html
-    fastqc_zip  = FASTQC.out.zip
-    ch_multiqc_files = ch_multiqc_files.mix( fastqc_html, fastqc_zip )
+    ch_multiqc_files = ch_multiqc_files.mix( FASTQC.out.html.collect { _meta, html -> html }, FASTQC.out.zip.collect { _meta, zip -> zip } )
 
     // -- 3. Extract UMIs from raw reads ----------------------------------------
     // UMI-tools extracts UMIs based on the specified pattern and appends them to
@@ -113,8 +111,7 @@ workflow {
     umi_reads = channel.empty()
     UMITOOLS_EXTRACT( ch_reads )
     umi_reads = UMITOOLS_EXTRACT.out.reads
-    umi_log = UMITOOLS_EXTRACT.out.log
-    ch_multiqc_files = ch_multiqc_files.mix( umi_log )
+    ch_multiqc_files = ch_multiqc_files.mix( UMITOOLS_EXTRACT.out.log.collect { _meta, log -> log } )
 
     // -- 4. BBMerge ------------------------------------------------
     // Merge paired end reads to single read.
@@ -122,8 +119,7 @@ workflow {
     BBMAP_BBMERGE( umi_reads, params.interleave )
     merged_reads = BBMAP_BBMERGE.out.merged
         .map { meta, reads -> [ meta + [single_end: true], reads ] }
-    ch_bbmerge_log = BBMAP_BBMERGE.out.log
-    ch_multiqc_files = ch_multiqc_files.mix( ch_bbmerge_log )
+    ch_multiqc_files = ch_multiqc_files.mix( BBMAP_BBMERGE.out.log.collect() )
     
     // -- 5. Trim adapter sequences -----------------------------------------------
     // Cutadapt removes adapter sequences and low-quality bases from the reads.
@@ -131,8 +127,7 @@ workflow {
     ch_trimmed_reads = channel.empty()
     CUTADAPT( merged_reads )
     ch_trimmed_reads = CUTADAPT.out.reads
-    ch_cutadapt_log = CUTADAPT.out.log
-    ch_multiqc_files = ch_multiqc_files.mix( ch_cutadapt_log )
+    ch_multiqc_files = ch_multiqc_files.mix( CUTADAPT.out.log.collect { _meta, log -> log } )
 
     //-- 6. Build Bowtie index from sgRNA library FASTA -------------------------
     ch_library = Channel
@@ -168,8 +163,7 @@ workflow {
     ch_dedup_bams = channel.empty()
     UMITOOLS_DEDUP( ch_sorted_indexed_bams, params.dedup_stats )
     ch_dedup_bams = UMITOOLS_DEDUP.out.bam
-    ch_dedup_log = UMITOOLS_DEDUP.out.log
-    ch_multiqc_files = ch_multiqc_files.mix( ch_dedup_log )
+    ch_multiqc_files = ch_multiqc_files.mix( UMITOOLS_DEDUP.out.log.collect { _meta, log -> log } )
     
     // -- 10. MAGeCK count --------------------------------------------------------
     // Because we did our OWN alignment (Bowtie) and deduplication (UMI-tools),
@@ -241,15 +235,16 @@ workflow {
         .ifEmpty([])
 
     ch_multiqc_config        = channel.fromPath("$projectDir/modules/nf-core/multiqc/multiqc_config.yml", checkIfExists: true)
-    ch_multiqc_logo          = params.multiqc_logo   ? channel.fromPath(params.multiqc_logo)   : channel.empty()
-    ch_multiqc_sample_names = params.multiqc_sample_names ? channel.fromPath(params.multiqc_sample_names) : channel.value([])
+    ch_multiqc_custom_config = params.multiqc_config      ? channel.fromPath(params.multiqc_config)      : channel.empty()
+    ch_multiqc_logo          = params.multiqc_logo        ? channel.fromPath(params.multiqc_logo)        : channel.empty()
+    ch_multiqc_sample_names  = params.multiqc_sample_names ? channel.fromPath(params.multiqc_sample_names) : channel.value([])
     MULTIQC(
-        channel.of([[id: 'multiqc']])
-            .combine( ch_multiqc_files.collect() )
-            .combine( ch_multiqc_config.toList() )
-            .combine( ch_multiqc_logo.toList() )
-            .combine( ch_name_replacements )
-            .combine( ch_multiqc_sample_names )
+        ch_multiqc_files.collect(),
+        ch_multiqc_config.toList(),
+        ch_multiqc_custom_config.toList(),
+        ch_multiqc_logo.toList(),
+        ch_name_replacements,
+        ch_multiqc_sample_names
     )
     ch_multiqc_report = MULTIQC.out.report
 
