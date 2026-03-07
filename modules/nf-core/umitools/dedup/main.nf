@@ -12,7 +12,7 @@ process UMITOOLS_DEDUP {
     val get_output_stats
 
     output:
-    tuple val(meta), path("${prefix}.bam")     , emit: bam
+    tuple val(meta), path("${prefix}_dedup.bam")     , emit: bam
     tuple val(meta), path("*.log")             , emit: log
     tuple val(meta), path("*edit_distance.tsv"), optional:true, emit: tsv_edit_distance
     tuple val(meta), path("*per_umi.tsv")      , optional:true, emit: tsv_per_umi
@@ -27,7 +27,7 @@ process UMITOOLS_DEDUP {
     prefix = task.ext.prefix ?: "${meta.id}"
     def paired = meta.single_end ? "" : "--paired"
     stats = get_output_stats ? "--output-stats ${prefix}" : ""
-    if ("$bam" == "${prefix}.bam") error "Input and output names are the same, set prefix in module configuration to disambiguate!"
+    if ("$bam" == "${prefix}_dedup.bam") error "Input and output names are the same, set prefix in module configuration to disambiguate!"
 
     if (!(args ==~ /.*--random-seed.*/)) {args += " --random-seed=100"}
     """
