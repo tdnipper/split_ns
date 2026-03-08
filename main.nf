@@ -21,7 +21,8 @@
 //   modules/nf-core/<tool>/<subtool>/main.nf
 
 include { FQ_LINT } from './modules/nf-core/fq/lint/main'
-include { FASTQC } from './modules/nf-core/fastqc/main'
+include { FASTQC as FASTQC_RAW     } from './modules/nf-core/fastqc/main'
+include { FASTQC as FASTQC_TRIMMED } from './modules/nf-core/fastqc/main'
 include { UMITOOLS_EXTRACT } from './modules/nf-core/umitools/extract/main'
 include { BBMAP_BBMERGE } from './modules/nf-core/bbmap/bbmerge/main'
 include { CUTADAPT } from './modules/nf-core/cutadapt/main'
@@ -102,8 +103,8 @@ workflow {
     ch_versions_fq = FQ_LINT.out.versions_fq
 
     // -- 2. FastQC on raw reads ------------------------------------------------
-    FASTQC( ch_reads )
-    ch_multiqc_files = ch_multiqc_files.mix( FASTQC.out.html.collect { _meta, html -> html }, FASTQC.out.zip.collect { _meta, zip -> zip } )
+    FASTQC_RAW( ch_reads )
+    ch_multiqc_files = ch_multiqc_files.mix( FASTQC_RAW.out.html.collect { _meta, html -> html }, FASTQC_RAW.out.zip.collect { _meta, zip -> zip } )
 
     // -- 3. Extract UMIs from raw reads ----------------------------------------
     // UMI-tools extracts UMIs based on the specified pattern and appends them to
@@ -128,6 +129,10 @@ workflow {
     CUTADAPT( merged_reads )
     ch_trimmed_reads = CUTADAPT.out.reads
     ch_multiqc_files = ch_multiqc_files.mix( CUTADAPT.out.log.collect { _meta, log -> log } )
+
+    // -- 5b. FastQC on trimmed reads -------------------------------------------
+    FASTQC_TRIMMED( ch_trimmed_reads )
+    ch_multiqc_files = ch_multiqc_files.mix( FASTQC_TRIMMED.out.html.collect { _meta, html -> html }, FASTQC_TRIMMED.out.zip.collect { _meta, zip -> zip } )
 
     //-- 6. Build Bowtie index from sgRNA library FASTA -------------------------
     ch_library = Channel
