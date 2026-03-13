@@ -85,8 +85,8 @@ workflow {
     if (!params.sgrna_library)       { error "Please provide an sgRNA library FASTA with --sgrna_library" }
     if (!params.mageck_library)       { error "Please provide an sgRNA library .txt or .csv file with --mageck_library" }
     // if (!params.mageck_control)      { error "Please provide a control sgRNA list with --mageck_control" }
-    // if (!params.mageck_treatment_id) { error "Please provide treatment sample ID(s) with --mageck_treatment_id" }
-    // if (!params.mageck_control_id)   { error "Please provide control sample ID(s) with --mageck_control_id" }
+    if (!params.mageck_treatment_id) { error "Please provide treatment sample ID(s) with --mageck_treatment_id" }
+    if (!params.mageck_control_id)   { error "Please provide control sample ID(s) with --mageck_control_id" }
 
     ch_multiqc_files = channel.empty()
 
@@ -178,42 +178,27 @@ workflow {
     //
     // We collect all per-sample BAMs and bundle them under a single meta map,
     // because MAGeCK count runs once across ALL samples together.
-    // ch_bams_collected = ch_dedup_bams
-    //     .collect { meta, bam -> bam }
-    //     .map { bams ->
-    //         def combined_meta = [
-    //             id            : 'all_samples',
-    //             sample_labels : ch_dedup_bams.collect { meta, bam -> meta.id }.join(',')
-    //         ]
-    //         [ combined_meta, bams ]
-    //     }
-
+    ch_mageck_counts = channel.empty()
     MAGECK_COUNT(
         ch_dedup_bams,
         file(params.mageck_library)
     )
-
+    ch_mageck_counts = MAGECK_COUNT.out.count
     // -- 10. MAGeCK test (RRA ranking) -----------------------------------------
     // MAGeCK test uses the count table to rank sgRNAs and genes by depletion
     // or enrichment between conditions using the RRA (Robust Rank Aggregation)
     // algorithm. Genes whose sgRNAs all consistently drop out are ranked as
     // essential — that's the core readout of a KO screen.
     //
-    // The nf-core mageck/test module expects:
-    //   input[0]: tuple val(meta), path(count_table)
-    //   input[1]: val(treatment)    <- sample label(s) for treatment condition
-    //   input[2]: val(control)      <- sample label(s) for control condition
-    //   input[3]: path(control_sgrna) <- optional: file of non-targeting controls
-    //
-    // IMPORTANT: Replace 'treatment_sample_name' and 'control_sample_name' below
-    // with the actual sample IDs from your samplesheet (they must match the
-    // column headers in the count table produced by MAGECK_COUNT).
-    // MAGECK_TEST(
-    //     MAGECK_COUNT.out.count_table,
-    //     params.mageck_treatment_id,   // e.g. "day14_rep1,day14_rep2"
-    //     params.mageck_control_id,     // e.g. "day0_plasmid"
-    //     file(params.mageck_control)   // non-targeting control sgRNA list (one per line)
-    // )
+    // The nf-core mageck/test module expects only the count table as input.
+    // Treatment/control IDs and control sgRNA file are passed via ext.args
+    // in nextflow.config. Supply them as params on the command line:
+    //   --mageck_treatment_id "day14_rep1,day14_rep2"
+    //   --mageck_control_id "day0_plasmid"
+    //   --mageck_control /path/to/control_sgrnas.txt
+    MAGECK_TEST(
+        ch_mageck_counts
+    )
 
     // FINAL -- MultiQC
     // MultiQC aggregates all the QC reports (FastQC, BBMerge stats, UMI-tools logs)
