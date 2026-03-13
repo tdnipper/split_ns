@@ -35,6 +35,7 @@ include { UMITOOLS_DEDUP } from './modules/nf-core/umitools/dedup/main'
 include { MAGECK_COUNT } from './modules/nf-core/mageck/count/main'
 include { MAGECK_TEST } from './modules/nf-core/mageck/test/main'
 include { MULTIQC } from './modules/nf-core/multiqc/main'
+include { LIBRARY_TO_FASTA } from './modules/local/library_to_fasta/main'
 
 // ── Helper: parse samplesheet ─────────────────────────────────────────────────
 /*
@@ -82,7 +83,6 @@ workflow {
 
     // ── Input validation ───────────────────────────────────────────────────────
     if (!params.input)               { error "Please provide a samplesheet with --input" }
-    if (!params.sgrna_library)       { error "Please provide an sgRNA library FASTA with --sgrna_library" }
     if (!params.mageck_library)       { error "Please provide an sgRNA library .txt or .csv file with --mageck_library" }
     // if (!params.mageck_control)      { error "Please provide a control sgRNA list with --mageck_control" }
     if (!params.treatment_condition) { error "Please provide a treatment condition with --treatment_condition" }
@@ -134,10 +134,13 @@ workflow {
     FASTQC_TRIMMED( ch_trimmed_reads )
     ch_multiqc_files = ch_multiqc_files.mix( FASTQC_TRIMMED.out.html.collect { _meta, html -> html }, FASTQC_TRIMMED.out.zip.collect { _meta, zip -> zip } )
 
-    //-- 6. Build Bowtie index from sgRNA library FASTA -------------------------
-    ch_library = Channel
-        .fromPath(params.sgrna_library, checkIfExists: true)
+    //-- 6. Convert library TXT to FASTA, then build Bowtie index ---------------
+    ch_mageck_library = Channel
+        .fromPath(params.mageck_library, checkIfExists: true)
         .map { lib -> [ [id: 'sgrna_library'], lib ] }
+
+    LIBRARY_TO_FASTA(ch_mageck_library)
+    ch_library = LIBRARY_TO_FASTA.out.fasta
 
     BOWTIE_BUILD(ch_library)
 
