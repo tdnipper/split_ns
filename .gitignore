@@ -14,5 +14,6 @@ dist/
 *.fa*
 *.txt
 *.csv
-test_data/
+*data/
 results*
+claude.md
