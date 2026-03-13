@@ -159,7 +159,7 @@ workflow {
     // coordinate order). SAMtools sort reorders them by genomic/library position,
     // which is required for indexing and for UMI deduplication.
     ch_sorted_indexed_bams = channel.empty()
-    SAMTOOLS_SORT( ch_aligned_reads, ch_library, params.index_format )
+    SAMTOOLS_SORT( ch_aligned_reads, ch_library.first(), params.index_format )
     ch_sorted_indexed_bams = SAMTOOLS_SORT.out.bam .join( SAMTOOLS_SORT.out.bai )
     
     // -- 9. Deduplicate by UMI --------------------------------------------------
