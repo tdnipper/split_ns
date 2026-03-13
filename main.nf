@@ -150,7 +150,7 @@ workflow {
     // .combine() pairs every item in TRIMGALORE.out.reads with the bowtie index.
     ch_aligned_reads = channel.empty()
     BOWTIE_ALIGN(
-        ch_trimmed_reads, BOWTIE_BUILD.out.index, true
+        ch_trimmed_reads, BOWTIE_BUILD.out.index.first(), true
     )
     ch_aligned_reads = BOWTIE_ALIGN.out.bam
 
