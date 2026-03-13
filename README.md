@@ -38,12 +38,36 @@ treat_rep1,data/treat_rep1_R1.fastq.gz,data/treat_rep1_R2.fastq.gz,treatment
 treat_rep2,data/treat_rep2_R1.fastq.gz,data/treat_rep2_R2.fastq.gz,treatment
 ```
 
+## sgRNA library file
+
+You only need to provide a single sgRNA library file via `--mageck_library`. The pipeline automatically converts it to FASTA format for Bowtie index building — no separate FASTA file is needed.
+
+The library file must be a **tab-separated text file** with a header row and the following columns:
+
+| Column   | Description                                      |
+|----------|--------------------------------------------------|
+| `sgRNA`  | Unique sgRNA identifier (e.g., `gene1_sg1`)      |
+| `sequence` | sgRNA protospacer sequence (e.g., `ACGTACGTACGTACGTACGT`) |
+| `gene`   | Target gene name (e.g., `gene1`)                 |
+
+### Example library file
+
+```
+sgRNA	sequence	gene
+TP53_sg1	ACGTACGTACGTACGTACGT	TP53
+TP53_sg2	TGCATGCATGCATGCATGCA	TP53
+BRCA1_sg1	AAGGCCTTAAGGCCTTAAGG	BRCA1
+BRCA1_sg2	CCTTAAGGCCTTAAGGCCTT	BRCA1
+NT_sg1	GACGATAGCGAGCTAGCTAG	non-targeting
+```
+
+This is the standard MAGeCK library format. The pipeline uses columns 1 and 2 (sgRNA name and sequence) to generate the FASTA reference for alignment, and passes the full file to MAGeCK count for sgRNA quantification.
+
 ## Usage
 
 ```bash
 nextflow run main.nf \
     --input samplesheet.csv \
-    --sgrna_library /path/to/library.fasta \
     --mageck_library /path/to/library.txt \
     --treatment_condition treatment \
     --control_condition control
@@ -54,8 +78,7 @@ nextflow run main.nf \
 | Parameter                | Default        | Description                                              |
 |--------------------------|----------------|----------------------------------------------------------|
 | `--input`                | (required)     | Path to samplesheet CSV                                  |
-| `--sgrna_library`        | (required)     | Path to sgRNA library FASTA                              |
-| `--mageck_library`       | (required)     | Path to sgRNA library `.txt` or `.csv` for MAGeCK count  |
+| `--mageck_library`       | (required)     | Path to sgRNA library tab-separated `.txt` file          |
 | `--treatment_condition`  | (required)     | Condition value for the treatment group                  |
 | `--control_condition`    | (required)     | Condition value for the control group                    |
 | `--mageck_control`       | `null`         | File listing control sgRNA IDs (one per line)            |
