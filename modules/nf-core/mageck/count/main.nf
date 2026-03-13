@@ -23,7 +23,7 @@ process MAGECK_COUNT {
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     def input_file = ("$inputfile".endsWith(".txt") || "$inputfile".endsWith(".tsv")) ? "-k ${inputfile}" : "--fastq ${inputfile}"    
-    def sample_label = ("$inputfile".endsWith(".txt") || "$inputfile".endsWith(".tsv")) ? '' : "--sample-label ${meta.id}"
+    def sample_label = ("$inputfile".endsWith(".txt") || "$inputfile".endsWith(".tsv")) ? '' : "--sample-label ${meta.sample_labels ?: meta.id}"
 
     """
     mageck \\

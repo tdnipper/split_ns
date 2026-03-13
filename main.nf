@@ -35,6 +35,7 @@ include { UMITOOLS_DEDUP } from './modules/nf-core/umitools/dedup/main'
 include { MAGECK_COUNT } from './modules/nf-core/mageck/count/main'
 include { MAGECK_TEST } from './modules/nf-core/mageck/test/main'
 include { MULTIQC } from './modules/nf-core/multiqc/main'
+include { LIBRARY_TO_FASTA } from './modules/local/library_to_fasta/main'
 
 // ── Helper: parse samplesheet ─────────────────────────────────────────────────
 /*
@@ -82,11 +83,10 @@ workflow {
 
     // ── Input validation ───────────────────────────────────────────────────────
     if (!params.input)               { error "Please provide a samplesheet with --input" }
-    if (!params.sgrna_library)       { error "Please provide an sgRNA library FASTA with --sgrna_library" }
     if (!params.mageck_library)       { error "Please provide an sgRNA library .txt or .csv file with --mageck_library" }
     // if (!params.mageck_control)      { error "Please provide a control sgRNA list with --mageck_control" }
-    if (!params.mageck_treatment_id) { error "Please provide treatment sample ID(s) with --mageck_treatment_id" }
-    if (!params.mageck_control_id)   { error "Please provide control sample ID(s) with --mageck_control_id" }
+    if (!params.treatment_condition) { error "Please provide a treatment condition with --treatment_condition" }
+    if (!params.control_condition)   { error "Please provide a control condition with --control_condition" }
 
     ch_multiqc_files = channel.empty()
 
@@ -134,10 +134,13 @@ workflow {
     FASTQC_TRIMMED( ch_trimmed_reads )
     ch_multiqc_files = ch_multiqc_files.mix( FASTQC_TRIMMED.out.html.collect { _meta, html -> html }, FASTQC_TRIMMED.out.zip.collect { _meta, zip -> zip } )
 
-    //-- 6. Build Bowtie index from sgRNA library FASTA -------------------------
-    ch_library = Channel
-        .fromPath(params.sgrna_library, checkIfExists: true)
+    //-- 6. Convert library TXT to FASTA, then build Bowtie index ---------------
+    ch_mageck_library = Channel
+        .fromPath(params.mageck_library, checkIfExists: true)
         .map { lib -> [ [id: 'sgrna_library'], lib ] }
+
+    LIBRARY_TO_FASTA(ch_mageck_library)
+    ch_library = LIBRARY_TO_FASTA.out.fasta
 
     BOWTIE_BUILD(ch_library)
 
@@ -147,7 +150,7 @@ workflow {
     // .combine() pairs every item in TRIMGALORE.out.reads with the bowtie index.
     ch_aligned_reads = channel.empty()
     BOWTIE_ALIGN(
-        ch_trimmed_reads, BOWTIE_BUILD.out.index, true
+        ch_trimmed_reads, BOWTIE_BUILD.out.index.first(), true
     )
     ch_aligned_reads = BOWTIE_ALIGN.out.bam
 
@@ -156,7 +159,7 @@ workflow {
     // coordinate order). SAMtools sort reorders them by genomic/library position,
     // which is required for indexing and for UMI deduplication.
     ch_sorted_indexed_bams = channel.empty()
-    SAMTOOLS_SORT( ch_aligned_reads, ch_library, params.index_format )
+    SAMTOOLS_SORT( ch_aligned_reads, ch_library.first(), params.index_format )
     ch_sorted_indexed_bams = SAMTOOLS_SORT.out.bam .join( SAMTOOLS_SORT.out.bai )
     
     // -- 9. Deduplicate by UMI --------------------------------------------------
@@ -179,25 +182,57 @@ workflow {
     // We collect all per-sample BAMs and bundle them under a single meta map,
     // because MAGeCK count runs once across ALL samples together.
     ch_mageck_counts = channel.empty()
+    ch_mageck_count_input = ch_dedup_bams
+        .collect(flat: false)
+        .map { tuples ->
+            def ids  = tuples.collect { it[0].id }
+            def bams = tuples.collect { it[1] }
+            def meta = [id: 'all_samples', sample_labels: ids.join(',')]
+            [meta, bams]
+        }
+
     MAGECK_COUNT(
-        ch_dedup_bams,
+        ch_mageck_count_input,
         file(params.mageck_library)
     )
     ch_mageck_counts = MAGECK_COUNT.out.count
-    // -- 10. MAGeCK test (RRA ranking) -----------------------------------------
+
+    // -- 11. MAGeCK test (RRA ranking) -----------------------------------------
     // MAGeCK test uses the count table to rank sgRNAs and genes by depletion
     // or enrichment between conditions using the RRA (Robust Rank Aggregation)
     // algorithm. Genes whose sgRNAs all consistently drop out are ranked as
     // essential — that's the core readout of a KO screen.
     //
-    // The nf-core mageck/test module expects only the count table as input.
-    // Treatment/control IDs and control sgRNA file are passed via ext.args
-    // in nextflow.config. Supply them as params on the command line:
-    //   --mageck_treatment_id "day14_rep1,day14_rep2"
-    //   --mageck_control_id "day0_plasmid"
-    //   --mageck_control /path/to/control_sgrnas.txt
+    // Treatment/control sample IDs are derived automatically from the
+    // 'condition' column in the samplesheet. Specify which condition values
+    // represent treatment and control via:
+    //   --treatment_condition "day14"
+    //   --control_condition "day0"
+    //   --mageck_control /path/to/control_sgrnas.txt  (optional)
+
+    // Derive treatment/control sample IDs from samplesheet condition column
+    ch_reads
+        .map { meta, _reads -> meta }
+        .branch {
+            treatment: it.condition == params.treatment_condition
+            control:   it.condition == params.control_condition
+        }
+        .set { ch_conditions }
+
+    treatment_ids = ch_conditions.treatment.map { it.id }.collect().map { it.join(',') }
+    control_ids   = ch_conditions.control.map { it.id }.collect().map { it.join(',') }
+
+    // Combine count table with derived treatment/control IDs
+    ch_mageck_test_input = ch_mageck_counts
+        .combine(treatment_ids)
+        .combine(control_ids)
+        .map { meta, counts, t_ids, c_ids ->
+            def new_meta = meta + [treatment_ids: t_ids, control_ids: c_ids]
+            [new_meta, counts]
+        }
+
     MAGECK_TEST(
-        ch_mageck_counts
+        ch_mageck_test_input
     )
 
     // FINAL -- MultiQC
