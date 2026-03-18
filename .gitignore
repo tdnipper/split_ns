@@ -17,3 +17,4 @@ dist/
 *data/
 results*
 claude.md
+.DS_Store
