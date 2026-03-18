@@ -6,7 +6,7 @@ CRISPR screen pipeline for UMI-aware sgRNA quantification and MAGeCK ranking.
 
 1. Extract UMIs from raw reads (UMI-tools)
 2. Merge paired-end reads (BBMerge)
-3. Trim adapter sequences (Cutadapt)
+3. Trim flanking NS sequences (Cutadapt)
 4. Build Bowtie index from sgRNA library (Bowtie v1)
 5. Align trimmed reads (Bowtie v1)
 6. Sort & index BAM (SAMtools)
