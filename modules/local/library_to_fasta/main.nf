@@ -14,7 +14,7 @@ process LIBRARY_TO_FASTA {
     script:
     prefix = task.ext.prefix ?: "${meta.id}"
     """
-    sed 's/\\r\$//' ${library_txt} \\
+    tr '\\r' '\\n' < ${library_txt} \\
     | awk -F'\\t' '
         BEGIN { OFS="\\t" }
         {
