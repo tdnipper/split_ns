@@ -83,7 +83,6 @@ workflow {
     // ── Input validation ───────────────────────────────────────────────────────
     if (!params.input)               { error "Please provide a samplesheet with --input" }
     if (!params.mageck_library)       { error "Please provide an sgRNA library .txt or .csv file with --mageck_library" }
-    if (!params.treatment_condition) { error "Please provide a treatment condition with --treatment_condition" }
     if (!params.control_condition)   { error "Please provide a control condition with --control_condition" }
 
     ch_multiqc_files = channel.empty()
@@ -202,38 +201,41 @@ workflow {
     // essential — that's the core readout of a KO screen.
     //
     // Treatment/control sample IDs are derived automatically from the
-    // 'condition' column in the samplesheet. Specify which condition values
-    // represent treatment and control via:
-    //   --treatment_condition "day14"
+    // 'condition' column in the samplesheet. Every unique condition that
+    // is not --control_condition is treated as a separate treatment group
+    // and tested independently against the control.
     //   --control_condition "day0"
     //   --mageck_control /path/to/control_sgrnas.txt  (optional)
 
-    // Derive treatment/control sample IDs from samplesheet condition column
-    ch_reads
+    // Derive control sample IDs
+    control_ids = ch_reads
         .map { meta, _reads -> meta }
-        .branch {
-            treatment: it.condition == params.treatment_condition
-            control:   it.condition == params.control_condition
-        }
-        .set { ch_conditions }
-
-    treatment_ids = ch_conditions.treatment
-        .ifEmpty { error "No samples matched treatment_condition '${params.treatment_condition}'. Check that this value matches entries in the 'condition' column of your samplesheet." }
-        .map { it.id }
-        .collect()
-        .map { it.join(',') }
-    control_ids = ch_conditions.control
+        .filter { it.condition == params.control_condition }
         .ifEmpty { error "No samples matched control_condition '${params.control_condition}'. Check that this value matches entries in the 'condition' column of your samplesheet." }
         .map { it.id }
         .collect()
         .map { it.join(',') }
 
-    // Combine count table with derived treatment/control IDs
+    // Derive treatment groups: every unique condition that isn't the control
+    // produces one MAGECK_TEST run
+    ch_treatment_groups = ch_reads
+        .map { meta, _reads -> meta }
+        .filter { it.condition != params.control_condition }
+        .ifEmpty { error "No non-control conditions found in samplesheet. All samples have condition '${params.control_condition}'." }
+        .map { [it.condition, it.id] }
+        .groupTuple()
+        .map { condition, ids -> [condition, ids.join(',')] }
+
+    // Build MAGECK_TEST input: one run per treatment condition
     ch_mageck_test_input = ch_mageck_counts
-        .combine(treatment_ids)
+        .combine(ch_treatment_groups)
         .combine(control_ids)
-        .map { meta, counts, t_ids, c_ids ->
-            def new_meta = meta + [treatment_ids: t_ids, control_ids: c_ids]
+        .map { meta, counts, condition, t_ids, c_ids ->
+            def new_meta = meta + [
+                id: condition,
+                treatment_ids: t_ids,
+                control_ids: c_ids
+            ]
             [new_meta, counts]
         }
 
