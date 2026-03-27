@@ -217,8 +217,16 @@ workflow {
         }
         .set { ch_conditions }
 
-    treatment_ids = ch_conditions.treatment.map { it.id }.collect().map { it.join(',') }
-    control_ids   = ch_conditions.control.map { it.id }.collect().map { it.join(',') }
+    treatment_ids = ch_conditions.treatment
+        .ifEmpty { error "No samples matched treatment_condition '${params.treatment_condition}'. Check that this value matches entries in the 'condition' column of your samplesheet." }
+        .map { it.id }
+        .collect()
+        .map { it.join(',') }
+    control_ids = ch_conditions.control
+        .ifEmpty { error "No samples matched control_condition '${params.control_condition}'. Check that this value matches entries in the 'condition' column of your samplesheet." }
+        .map { it.id }
+        .collect()
+        .map { it.join(',') }
 
     // Combine count table with derived treatment/control IDs
     ch_mageck_test_input = ch_mageck_counts
