@@ -26,7 +26,6 @@ include { FASTQC as FASTQC_TRIMMED } from './modules/nf-core/fastqc/main'
 include { UMITOOLS_EXTRACT } from './modules/nf-core/umitools/extract/main'
 include { BBMAP_BBMERGE } from './modules/nf-core/bbmap/bbmerge/main'
 include { CUTADAPT } from './modules/nf-core/cutadapt/main'
-include { TRIMGALORE } from './modules/nf-core/trimgalore/main'
 include { BOWTIE_BUILD } from './modules/nf-core/bowtie/build/main'
 include { BOWTIE_ALIGN } from './modules/nf-core/bowtie/align/main'
 include { SAMTOOLS_SORT } from './modules/nf-core/samtools/sort/main'
@@ -84,7 +83,6 @@ workflow {
     // ── Input validation ───────────────────────────────────────────────────────
     if (!params.input)               { error "Please provide a samplesheet with --input" }
     if (!params.mageck_library)       { error "Please provide an sgRNA library .txt or .csv file with --mageck_library" }
-    // if (!params.mageck_control)      { error "Please provide a control sgRNA list with --mageck_control" }
     if (!params.treatment_condition) { error "Please provide a treatment condition with --treatment_condition" }
     if (!params.control_condition)   { error "Please provide a control condition with --control_condition" }
 
@@ -147,7 +145,7 @@ workflow {
     // -- 7. Align reads to sgRNA library ----------------------------------------
     // Bowtie v1 is used here because sgRNA sequences are short (~20 bp).
     // We combine each sample's trimmed reads with the single shared index.
-    // .combine() pairs every item in TRIMGALORE.out.reads with the bowtie index.
+    // .combine() pairs every item in CUTADAPT.out.reads with the bowtie index.
     ch_aligned_reads = channel.empty()
     BOWTIE_ALIGN(
         ch_trimmed_reads, BOWTIE_BUILD.out.index.first(), true
