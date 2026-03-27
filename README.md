@@ -26,7 +26,7 @@ The input samplesheet is a CSV with the following columns:
 | `fastq_2`   | No       | Path to R2 FASTQ file (leave empty for single-end)               |
 | `condition` | Yes      | Experimental group label (e.g., `treatment`, `control`, `day14`) |
 
-The `condition` column drives MAGeCK treatment/control grouping. All samples sharing the same condition value are grouped together. Use the `--treatment_condition` and `--control_condition` parameters to specify which condition values represent each group.
+The `condition` column drives MAGeCK treatment/control grouping. Specify the control group with `--control_condition`. Every other unique condition value in the samplesheet is automatically treated as a separate treatment group and tested independently against the control via MAGeCK test.
 
 ### Example samplesheet
 
@@ -34,8 +34,9 @@ The `condition` column drives MAGeCK treatment/control grouping. All samples sha
 sample,fastq_1,fastq_2,condition
 ctrl_rep1,data/ctrl_rep1_R1.fastq.gz,data/ctrl_rep1_R2.fastq.gz,control
 ctrl_rep2,data/ctrl_rep2_R1.fastq.gz,data/ctrl_rep2_R2.fastq.gz,control
-treat_rep1,data/treat_rep1_R1.fastq.gz,data/treat_rep1_R2.fastq.gz,treatment
-treat_rep2,data/treat_rep2_R1.fastq.gz,data/treat_rep2_R2.fastq.gz,treatment
+p1_rep1,data/p1_rep1_R1.fastq.gz,data/p1_rep1_R2.fastq.gz,p1
+p2_rep1,data/p2_rep1_R1.fastq.gz,data/p2_rep1_R2.fastq.gz,p2
+p3_rep1,data/p3_rep1_R1.fastq.gz,data/p3_rep1_R2.fastq.gz,p3
 ```
 
 ## sgRNA library file
@@ -69,7 +70,6 @@ This is the standard MAGeCK library format. The pipeline uses columns 1 and 2 (s
 nextflow run main.nf \
     --input samplesheet.csv \
     --mageck_library /path/to/library.txt \
-    --treatment_condition treatment \
     --control_condition control
 ```
 
@@ -79,8 +79,7 @@ nextflow run main.nf \
 |--------------------------|----------------|----------------------------------------------------------|
 | `--input`                | (required)     | Path to samplesheet CSV                                  |
 | `--mageck_library`       | (required)     | Path to sgRNA library tab-separated `.txt` file          |
-| `--treatment_condition`  | (required)     | Condition value for the treatment group                  |
-| `--control_condition`    | (required)     | Condition value for the control group                    |
+| `--control_condition`    | (required)     | Condition value for the control group (all other conditions are tested against it) |
 | `--mageck_control`       | `null`         | File listing control sgRNA IDs (one per line)            |
 | `--outdir`               | `results`      | Output directory                                         |
 | `--umi_pattern`          | `NNNNNNNNNN`   | UMI barcode pattern                                      |
