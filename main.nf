@@ -103,11 +103,27 @@ workflow {
     FASTQC_RAW( ch_reads )
     ch_multiqc_files = ch_multiqc_files.mix( FASTQC_RAW.out.html.collect { _meta, html -> html }, FASTQC_RAW.out.zip.collect { _meta, zip -> zip } )
 
+    // -- Gate: block downstream until FQ_LINT + FASTQC_RAW complete -----------
+    // If FQ_LINT fails the pipeline terminates before any further processing.
+    // FQ_LINT only runs on paired-end reads; .ifEmpty(true) lets the gate pass
+    // when there are no paired-end reads.
+    ch_qc_done = FQ_LINT.out.lint
+        .collect()
+        .ifEmpty(true)
+        .mix(
+            FASTQC_RAW.out.zip.collect()
+        )
+        .collect()
+        .map { true }
+
+    ch_reads_gated = ch_reads.combine( ch_qc_done )
+        .map { meta, reads, _gate -> [ meta, reads ] }
+
     // -- 3. Extract UMIs from raw reads ----------------------------------------
     // UMI-tools extracts UMIs based on the specified pattern and appends them to
     // the read headers.
     umi_reads = channel.empty()
-    UMITOOLS_EXTRACT( ch_reads )
+    UMITOOLS_EXTRACT( ch_reads_gated )
     umi_reads = UMITOOLS_EXTRACT.out.reads
     ch_multiqc_files = ch_multiqc_files.mix( UMITOOLS_EXTRACT.out.log.collect { _meta, log -> log } )
 

@@ -83,6 +83,8 @@ nextflow run main.nf \
 | `--mageck_control`       | `null`         | File listing control sgRNA IDs (one per line)            |
 | `--outdir`               | `results`      | Output directory                                         |
 | `--umi_pattern`          | `NNNNNNNNNN`   | UMI barcode pattern                                      |
+| `--max_cpus`             | `8`            | Maximum CPUs available to the pipeline                   |
+| `--max_memory`           | `61`           | Maximum memory (GB) available to the pipeline            |
 | `--skip_fastqc`          | `false`        | Skip FastQC steps                                        |
 | `--skip_trimming`        | `false`        | Skip adapter trimming                                    |
 
