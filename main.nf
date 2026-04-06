@@ -40,39 +40,29 @@ include { LIBRARY_TO_FASTA } from './modules/local/library_to_fasta/main'
 /*
     Expected samplesheet format (CSV):
 
-    Single-end:
-        sample,fastq_1,fastq_2,condition
-        ctrl_rep1,/path/to/ctrl_rep1.fastq.gz,,control
-        treat_rep1,/path/to/treat_rep1.fastq.gz,,treatment
-
-    Paired-end:
         sample,fastq_1,fastq_2,condition
         ctrl_rep1,/path/to/ctrl_rep1_R1.fastq.gz,/path/to/ctrl_rep1_R2.fastq.gz,control
         treat_rep1,/path/to/treat_rep1_R1.fastq.gz,/path/to/treat_rep1_R2.fastq.gz,treatment
 
     - 'sample'    : unique sample identifier
     - 'fastq_1'   : path to R1 FASTQ (required)
-    - 'fastq_2'   : path to R2 FASTQ (leave empty for single-end)
+    - 'fastq_2'   : path to R2 FASTQ (required — this pipeline requires paired-end reads)
     - 'condition' : used later by MAGeCK to define control vs treatment groups
-
-    Note: meta.single_end is set automatically based on whether fastq_2 is provided.
-    For paired-end CRISPR screens, set --umi_discard_read 2 to discard R2 after
-    UMI extraction so that only R1 (the sgRNA read) is passed to alignment.
 */
 def parse_samplesheet(csv_file) {
     channel
         .fromPath(csv_file)
         .splitCsv(header: true)
         .map { row ->
-            def single_end = !row.fastq_2 || row.fastq_2.trim() == ''
+            if (!row.fastq_2 || row.fastq_2.trim() == '') {
+                error "Sample '${row.sample}' is single-end. This pipeline requires paired-end reads (fastq_2 must be provided) because BBMerge is used to merge R1 and R2."
+            }
             def meta = [
                 id         : row.sample,
                 condition  : row.condition,
-                single_end : single_end
+                single_end : false
             ]
-            def reads = single_end
-                ? [ file(row.fastq_1, checkIfExists: true) ]
-                : [ file(row.fastq_1, checkIfExists: true), file(row.fastq_2, checkIfExists: true) ]
+            def reads = [ file(row.fastq_1, checkIfExists: true), file(row.fastq_2, checkIfExists: true) ]
             return [ meta, reads ]
         }
 }
