@@ -176,7 +176,7 @@ workflow {
     // and collapses them into a single representative read.
     // This removes PCR duplicates that could inflate counts for some sgRNAs.
     ch_dedup_bams = channel.empty()
-    UMITOOLS_DEDUP( ch_sorted_indexed_bams, params.dedup_stats )
+    UMITOOLS_DEDUP( ch_sorted_indexed_bams, false )
     ch_dedup_bams = UMITOOLS_DEDUP.out.bam
     ch_multiqc_files = ch_multiqc_files.mix( UMITOOLS_DEDUP.out.log.collect { _meta, log -> log } )
     
