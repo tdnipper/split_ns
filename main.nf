@@ -269,11 +269,11 @@ workflow {
             def suffixes = paired ? ['_1', '_2'] : ['']
             def mappings = []
 
-            def fastq1_simplename = file(reads[0][0]).simpleName
+            def fastq1_simplename = reads[0].simpleName
             if (fastq1_simplename != meta.id) {
                 mappings << [fastq1_simplename, "${meta.id}${suffixes[0]}"]
                 if (paired) {
-                    mappings << [file(reads[0][1]).simpleName, "${meta.id}${suffixes[1]}"]
+                    mappings << [reads[1].simpleName, "${meta.id}${suffixes[1]}"]
                 }
             }
 
